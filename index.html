@@ -614,7 +614,7 @@ tr:last-child td { border-bottom:none; }
           <button id="resetDayButton" class="danger">🧹 Zamknij dzień i wyczyść system</button>
 
           <div class="adminTip">
-            Reset usuwa plan, raport, stanowiska, kolejki, skany, przydziały i aktywne logowania.
+            Reset usuwa plan, raport, braki, stanowiska, kolejki, skany, przydziały i aktywne logowania.
             Zostają użytkownicy, role i struktura systemu.
           </div>
 
@@ -872,6 +872,7 @@ function displayLogin(value) {
 function normalizeStatus(status) {
   const value = String(status || "").toUpperCase().trim();
   if (value === "NIEPRAWIDŁOWA") return "NIEPOPRAWNA";
+  if (value === "DO_DOPAKOWANIA" || value === "DO DOPAKOWANIA") return "BRAKI";
   return value;
 }
 
@@ -929,6 +930,38 @@ async function getUserRole(userId) {
 
 function hasAccess(role, allowedRoles) {
   return allowedRoles.includes(role);
+}
+
+function operationalHasData(row) {
+  if (!row) return false;
+
+  return [
+    "packing_plan_count",
+    "packing_sessions_count",
+    "packing_session_items_count",
+    "station_lines_count",
+    "station_bags_count",
+    "station_item_states_count",
+    "station_scans_count",
+    "tray_scans_count",
+    "packing_item_events_count"
+  ].some(key => Number(row[key] || 0) > 0);
+}
+
+function operationalDataDetailsHtml(row) {
+  if (!row) return "Brak danych statusu.";
+
+  return `
+    Plan pakowania: <b>${Number(row.packing_plan_count || 0)}</b><br>
+    Raport / sesje: <b>${Number(row.packing_sessions_count || 0)}</b><br>
+    Pozycje sesji: <b>${Number(row.packing_session_items_count || 0)}</b><br>
+    Stanowiska: <b>${Number(row.station_lines_count || 0)}</b><br>
+    Torby stanowiskowe: <b>${Number(row.station_bags_count || 0)}</b><br>
+    Stany pozycji stanowiskowych: <b>${Number(row.station_item_states_count || 0)}</b><br>
+    Skany stanowiskowe: <b>${Number(row.station_scans_count || 0)}</b><br>
+    Stare skany indywidualne: <b>${Number(row.tray_scans_count || 0)}</b><br>
+    Historia zdarzeń: <b>${Number(row.packing_item_events_count || 0)}</b>
+  `;
 }
 
 async function adminLogin() {
@@ -1046,18 +1079,24 @@ async function loadOperationalStatus() {
   const total =
     Number(row.packing_plan_count || 0) +
     Number(row.packing_sessions_count || 0) +
+    Number(row.packing_session_items_count || 0) +
     Number(row.station_lines_count || 0) +
     Number(row.station_bags_count || 0) +
+    Number(row.station_item_states_count || 0) +
     Number(row.station_scans_count || 0) +
-    Number(row.tray_scans_count || 0);
+    Number(row.tray_scans_count || 0) +
+    Number(row.packing_item_events_count || 0);
 
   const text =
     `Plan: ${row.packing_plan_count || 0}\n` +
     `Raport/sesje: ${row.packing_sessions_count || 0}\n` +
+    `Pozycje sesji: ${row.packing_session_items_count || 0}\n` +
     `Stanowiska: ${row.station_lines_count || 0}\n` +
     `Torby stanowiskowe: ${row.station_bags_count || 0}\n` +
+    `Stany pozycji stanowiskowych: ${row.station_item_states_count || 0}\n` +
     `Skany stanowiskowe: ${row.station_scans_count || 0}\n` +
-    `Stare tray_scans: ${row.tray_scans_count || 0}`;
+    `Stare tray_scans: ${row.tray_scans_count || 0}\n` +
+    `Historia zdarzeń: ${row.packing_item_events_count || 0}`;
 
   setOperationalStatus(
     total > 0
@@ -1067,19 +1106,6 @@ async function loadOperationalStatus() {
   );
 
   return row;
-}
-
-function operationalHasData(row) {
-  if (!row) return false;
-
-  return (
-    Number(row.packing_plan_count || 0) > 0 ||
-    Number(row.packing_sessions_count || 0) > 0 ||
-    Number(row.station_lines_count || 0) > 0 ||
-    Number(row.station_bags_count || 0) > 0 ||
-    Number(row.station_scans_count || 0) > 0 ||
-    Number(row.tray_scans_count || 0) > 0
-  );
 }
 
 async function saveMealDate() {
@@ -1116,35 +1142,24 @@ async function loadMealDate() {
   }
 }
 
-async function fetchAllSessions() {
-  const pageSize = 1000;
-  let from = 0;
-  let all = [];
+async function getReportData() {
+  const { data: sessions, error } = await supabaseClient.rpc("get_packing_report_rows");
 
-  while (true) {
-    const { data, error } = await supabaseClient
-      .from("packing_sessions")
-      .select("*")
-      .order("closed_at", { ascending:false })
-      .range(from, from + pageSize - 1);
-
-    if (error) throw new Error(error.message);
-
-    const rows = data || [];
-    all = all.concat(rows);
-
-    if (rows.length < pageSize) break;
-    from += pageSize;
+  if (error) {
+    throw new Error(error.message);
   }
 
-  return all;
-}
+  const { data: brakiRows, error: brakiError } = await supabaseClient.rpc("get_braki_rows");
 
-async function getReportData() {
-  const sessions = await fetchAllSessions();
+  if (brakiError) {
+    throw new Error(brakiError.message);
+  }
 
   const { data: bagCount, error: bagCountError } = await supabaseClient.rpc("count_unique_bags");
-  if (bagCountError) throw new Error(bagCountError.message);
+
+  if (bagCountError) {
+    throw new Error(bagCountError.message);
+  }
 
   const { data: mealDateRow } = await supabaseClient
     .from("app_settings")
@@ -1154,6 +1169,7 @@ async function getReportData() {
 
   return {
     sessions: sessions || [],
+    brakiRows: brakiRows || [],
     totalBagsInPlan: bagCount || 0,
     mealDate: mealDateRow?.value || ""
   };
@@ -1177,16 +1193,24 @@ async function exportExcel() {
 
   try {
     const report = await getReportData();
-    const data = report.sessions;
+    const data = report.sessions || [];
+    const brakiRows = report.brakiRows || [];
 
     const total = data.length;
     const correct = data.filter(x => normalizeStatus(x.status) === "POPRAWNA").length;
     const bad = data.filter(x => normalizeStatus(x.status) === "NIEPOPRAWNA").length;
+    const braki = data.filter(x => normalizeStatus(x.status) === "BRAKI").length;
 
-    const accuracy = total ? Math.round((correct / total) * 100) : 0;
+    const finalPacked = correct + bad;
+    const accuracy = finalPacked ? Math.round((correct / finalPacked) * 100) : 0;
 
-    const durations = data.map(x => x.duration_seconds).filter(x => typeof x === "number");
-    const avgDuration = durations.length ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : 0;
+    const durations = data
+      .map(x => x.duration_seconds)
+      .filter(x => typeof x === "number");
+
+    const avgDuration = durations.length
+      ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
+      : 0;
 
     const workers = {};
 
@@ -1199,6 +1223,7 @@ async function exportExcel() {
           total:0,
           correct:0,
           bad:0,
+          braki:0,
           wrong:0,
           missing:0,
           duplicates:0,
@@ -1209,8 +1234,11 @@ async function exportExcel() {
 
       workers[worker].total++;
 
-      if (normalizeStatus(x.status) === "POPRAWNA") workers[worker].correct++;
-      if (normalizeStatus(x.status) === "NIEPOPRAWNA") workers[worker].bad++;
+      const status = normalizeStatus(x.status);
+
+      if (status === "POPRAWNA") workers[worker].correct++;
+      if (status === "NIEPOPRAWNA") workers[worker].bad++;
+      if (status === "BRAKI") workers[worker].braki++;
 
       workers[worker].wrong += splitItems(x.wrong_trays).length;
       workers[worker].missing += splitItems(x.missing_trays).length;
@@ -1225,7 +1253,8 @@ async function exportExcel() {
     const workersRows = Object.values(workers)
       .sort((a, b) => b.total - a.total)
       .map(w => {
-        const workerAccuracy = w.total ? Math.round((w.correct / w.total) * 100) : 0;
+        const workerFinal = w.correct + w.bad;
+        const workerAccuracy = workerFinal ? Math.round((w.correct / workerFinal) * 100) : 0;
         const workerAvg = w.durationCount ? Math.round(w.duration / w.durationCount) : 0;
 
         return [
@@ -1233,6 +1262,7 @@ async function exportExcel() {
           w.total,
           w.correct,
           w.bad,
+          w.braki,
           workerAccuracy + "%",
           formatDuration(workerAvg),
           w.missing,
@@ -1255,14 +1285,44 @@ async function exportExcel() {
       x.closed_at ? new Date(x.closed_at).toLocaleString("pl-PL") : ""
     ]);
 
+    const brakiSheetRows = [
+      ["BRAKI / DO DOPAKOWANIA"],
+      ["Dzień jedzony", formatDatePL(report.mealDate)],
+      [],
+      [
+        "QR torby",
+        "Posiłek",
+        "Kod",
+        "Rozmiar",
+        "QR tacki",
+        "Nazwa dania",
+        "Oznaczył brak",
+        "Kiedy oznaczono",
+        "Sesja zamknięta"
+      ],
+      ...brakiRows.map(x => [
+        x.bag_qr || "",
+        x.meal || "",
+        x.code || "",
+        x.size || "",
+        x.tray_qr || "",
+        x.dish_name || "",
+        displayLogin(x.missing_by_email || ""),
+        x.missing_at ? new Date(x.missing_at).toLocaleString("pl-PL") : "",
+        x.session_closed_at ? new Date(x.session_closed_at).toLocaleString("pl-PL") : ""
+      ])
+    ];
+
     const summaryRows = [
       ["PODSUMOWANIE"],
       ["Dzień jedzony", formatDatePL(report.mealDate)],
       [],
-      ["Spakowane torby", `${total} / ${report.totalBagsInPlan}`],
+      ["Łącznie wpisów w raporcie", total],
+      ["Finalnie zapakowane", `${finalPacked} / ${report.totalBagsInPlan}`],
       ["Poprawne", correct],
       ["Niepoprawne", bad],
-      ["Poprawność", accuracy + "%"],
+      ["Braki / do dopakowania", braki],
+      ["Poprawność finalnych", accuracy + "%"],
       ["Średni czas pakowania", formatDuration(avgDuration)]
     ];
 
@@ -1270,33 +1330,62 @@ async function exportExcel() {
       ["RANKING PRACOWNIKÓW"],
       ["Dzień jedzony", formatDatePL(report.mealDate)],
       [],
-      ["Pracownik", "Razem", "Poprawne", "Niepoprawne", "Poprawność", "Średni czas", "Brakujące tacki", "Błędne tacki", "Duplikaty"],
+      [
+        "Pracownik",
+        "Razem",
+        "Poprawne",
+        "Niepoprawne",
+        "Braki",
+        "Poprawność finalnych",
+        "Średni czas",
+        "Brakujące tacki",
+        "Błędne tacki",
+        "Duplikaty"
+      ],
       ...workersRows
     ];
 
     const historySheetRows = [
-      ["QR torby", "Status", "Pracownik / stanowisko", "Oczekiwane tacki", "Poprawne tacki", "Czas pakowania", "Brakujące tacki", "Błędne tacki", "Duplikaty", "Wszystkie skany", "Data zamknięcia"],
+      [
+        "QR torby",
+        "Status",
+        "Pracownik / stanowisko",
+        "Oczekiwane tacki",
+        "Poprawne tacki",
+        "Czas pakowania",
+        "Brakujące tacki",
+        "Błędne tacki",
+        "Duplikaty",
+        "Wszystkie skany",
+        "Data zamknięcia"
+      ],
       ...historyRows
     ];
 
     const workbook = XLSX.utils.book_new();
 
     const summarySheet = sheetFromRows(summaryRows);
-    setColumnWidths(summarySheet, [28, 55]);
+    setColumnWidths(summarySheet, [30, 55]);
 
     const workersSheet = sheetFromRows(workersSheetRows);
-    setColumnWidths(workersSheet, [28, 12, 12, 14, 14, 16, 18, 16, 14]);
-    setAutoFilter(workersSheet, "A4:I4");
+    setColumnWidths(workersSheet, [28, 12, 12, 14, 12, 20, 16, 18, 16, 14]);
+    setAutoFilter(workersSheet, "A4:J4");
     workersSheet["!freeze"] = { xSplit: 0, ySplit: 4 };
 
     const historySheet = sheetFromRows(historySheetRows);
-    setColumnWidths(historySheet, [24, 16, 28, 18, 16, 18, 35, 35, 35, 60, 22]);
+    setColumnWidths(historySheet, [24, 18, 28, 18, 16, 18, 35, 35, 35, 60, 22]);
     setAutoFilter(historySheet, "A1:K1");
     historySheet["!freeze"] = { xSplit: 0, ySplit: 1 };
+
+    const brakiSheet = sheetFromRows(brakiSheetRows);
+    setColumnWidths(brakiSheet, [24, 18, 18, 14, 28, 45, 24, 24, 24]);
+    setAutoFilter(brakiSheet, "A4:I4");
+    brakiSheet["!freeze"] = { xSplit: 0, ySplit: 4 };
 
     XLSX.utils.book_append_sheet(workbook, summarySheet, "Podsumowanie");
     XLSX.utils.book_append_sheet(workbook, workersSheet, "Pracownicy");
     XLSX.utils.book_append_sheet(workbook, historySheet, "Historia");
+    XLSX.utils.book_append_sheet(workbook, brakiSheet, "Braki");
 
     const date = new Date().toISOString().slice(0, 10);
     XLSX.writeFile(workbook, `raport_pakowania_${date}.xlsx`);
@@ -1305,7 +1394,7 @@ async function exportExcel() {
     lastReportExportAt = new Date();
 
     setSessionsStatus(
-      `✅ Raport Excel wygenerowany.\nWpisów w raporcie: ${total}\nMożesz teraz wykonać reset dnia.`,
+      `✅ Raport Excel wygenerowany.\nWpisów w raporcie: ${total}\nPoprawne: ${correct}\nNiepoprawne: ${bad}\nBraki: ${braki}\nDodano zakładkę Braki.`,
       "ok"
     );
 
@@ -1329,32 +1418,32 @@ async function resetDay() {
 
   const sessionsCount = Number(row.packing_sessions_count || 0);
 
-  if (sessionsCount > 0 && !reportExportedThisSession) {
-    setSessionsStatus(
-      "❌ Najpierw pobierz raport Excel. Reset dnia jest zablokowany, dopóki raport nie zostanie wygenerowany w tej sesji.",
-      "bad"
-    );
-    return;
-  }
-
   const choice = await showChoiceModal({
     title: "🧹 Zamknąć dzień i wyczyścić system?",
-    text: "To usunie wszystkie dane operacyjne obecnego dnia.",
+    text: sessionsCount > 0
+      ? "Przed resetem system automatycznie pobierze raport Excel. Dopiero po poprawnym pobraniu raportu dane zostaną usunięte."
+      : "To usunie wszystkie dane operacyjne obecnego dnia. Raport nie zostanie pobrany, bo nie ma jeszcze żadnych sesji pakowania.",
     details:
-      `Zostaną usunięte:<br>` +
-      `- plan pakowania<br>` +
-      `- historia pakowania / raport<br>` +
-      `- stanowiska, kolejki, skany i przydziały<br>` +
-      `- wpisy aktywnych logowań<br>` +
-      `- dane tray_scans<br><br>` +
-      `Zostaną użytkownicy, role i struktura systemu.`,
+      operationalDataDetailsHtml(row) +
+      `<br><br>Zostaną użytkownicy, role i struktura systemu.`,
     buttons: [
       { label:"Anuluj", value:"cancel", className:"btnCancel" },
-      { label:"Rozumiem — przejdź dalej", value:"continue", className:"btnReplace" }
+      { label:"Pobierz raport i resetuj dzień", value:"continue", className:"btnReplace" }
     ]
   });
 
   if (choice !== "continue") return;
+
+  if (sessionsCount > 0) {
+    setSessionsStatus("⏳ Najpierw generuję raport Excel...", "info");
+
+    const exported = await exportExcel();
+
+    if (!exported) {
+      setSessionsStatus("❌ Reset anulowany, bo nie udało się wygenerować raportu.", "bad");
+      return;
+    }
+  }
 
   const typed = window.prompt("Aby potwierdzić reset dnia, wpisz dokładnie: RESET");
 
@@ -1366,24 +1455,27 @@ async function resetDay() {
   setSessionsStatus("⏳ Czyszczę dane operacyjne...", "info");
   el("resetDayButton").disabled = true;
 
-  const { data, error } = await supabaseClient.rpc("admin_reset_operational_data");
+  try {
+    const { data, error } = await supabaseClient.rpc("admin_reset_operational_data");
 
-  el("resetDayButton").disabled = false;
+    if (error || data !== "OK") {
+      setSessionsStatus("❌ Nie udało się wykonać resetu dnia: " + (error?.message || data), "bad");
+      return;
+    }
 
-  if (error || data !== "OK") {
-    setSessionsStatus("❌ Nie udało się wykonać resetu dnia: " + (error?.message || data), "bad");
-    return;
+    reportExportedThisSession = false;
+    lastReportExportAt = null;
+
+    el("fileInput").value = "";
+    el("mealDateInput").value = "";
+
+    setSessionsStatus("✅ Reset dnia wykonany. Możesz wgrać nowy plan CSV.", "ok");
+
+    await refreshAdminData();
+
+  } finally {
+    el("resetDayButton").disabled = false;
   }
-
-  reportExportedThisSession = false;
-  lastReportExportAt = null;
-
-  el("fileInput").value = "";
-  el("mealDateInput").value = "";
-
-  setSessionsStatus("✅ Reset dnia wykonany. Możesz wgrać nowy plan CSV.", "ok");
-
-  await refreshAdminData();
 }
 
 function parseCsvLine(line, delimiter = ";") {
@@ -1778,8 +1870,9 @@ async function showLineDetails(index) {
 function scanStatusBadge(status) {
   const s = String(status || "not_scanned");
   if (s === "ok") return `<span class="badge badgeOk">OK</span>`;
+  if (s === "brak") return `<span class="badge badgeWarn">BRAK</span>`;
   if (["wrong", "forced_bad", "duplicate"].includes(s)) return `<span class="badge badgeBad">${escapeHtml(s)}</span>`;
-  return `<span class="badge badgeMuted">BRAK</span>`;
+  return `<span class="badge badgeMuted">NIE SPAKOWANO</span>`;
 }
 
 async function clearStationQueue(lineId, lineName) {
