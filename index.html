@@ -582,6 +582,8 @@ tr:last-child td { border-bottom:none; }
             <input type="date" id="mealDateInput">
           </div>
 
+          <p id="mealDateStatus" class="statusBox info">Dzień jedzony: nieodświeżony.</p>
+
           <div class="formGroup">
             <label>Plik CSV</label>
             <input type="file" id="fileInput" class="fileInput" accept=".csv,text/csv">
@@ -800,6 +802,7 @@ function setUserStatus(text, type = "info") { setBox("userStatus", text, type); 
 function setStationStatus(text, type = "info") { setBox("stationStatus", text, type); }
 function setLoginsStatus(text, type = "info") { setBox("loginsStatus", text, type); }
 function setOperationalStatus(text, type = "info") { setBox("operationalStatus", text, type); }
+function setMealDateStatus(text, type = "info") { setBox("mealDateStatus", text, type); }
 
 function setBox(id, text, type = "info") {
   const box = el(id);
@@ -1125,6 +1128,8 @@ async function saveMealDate() {
     return false;
   }
 
+  setMealDateStatus("Dzień jedzony: " + formatDatePL(mealDate), "ok");
+
   return true;
 }
 
@@ -1137,23 +1142,83 @@ async function loadMealDate() {
 
   if (!error && data && data.value) {
     el("mealDateInput").value = data.value;
+    setMealDateStatus("Dzień jedzony: " + formatDatePL(data.value), "ok");
   } else {
     el("mealDateInput").value = "";
+    setMealDateStatus("Dzień jedzony: nieustawiony.", "warn");
   }
 }
 
-async function getReportData() {
-  const { data: sessions, error } = await supabaseClient.rpc("get_packing_report_rows");
+async function fetchAllSessionsFallback() {
+  const pageSize = 1000;
+  let from = 0;
+  let all = [];
 
-  if (error) {
-    throw new Error(error.message);
+  while (true) {
+    const { data, error } = await supabaseClient
+      .from("packing_sessions")
+      .select("*")
+      .order("closed_at", { ascending:false })
+      .range(from, from + pageSize - 1);
+
+    if (error) throw new Error(error.message);
+
+    const rows = data || [];
+    all = all.concat(rows);
+
+    if (rows.length < pageSize) break;
+    from += pageSize;
   }
 
-  const { data: brakiRows, error: brakiError } = await supabaseClient.rpc("get_braki_rows");
+  return all;
+}
+
+function mergeSessionsWithBraki(reportRows, brakiReportRows) {
+  const map = new Map();
+
+  (reportRows || []).forEach(row => {
+    const id = row?.id || row?.session_id;
+    if (id) map.set(id, row);
+  });
+
+  (brakiReportRows || []).forEach(row => {
+    const id = row?.id || row?.session_id;
+    if (id && !map.has(id)) {
+      map.set(id, row);
+    }
+  });
+
+  return [...map.values()].sort((a, b) => {
+    const da = new Date(a.closed_at || a.session_closed_at || 0).getTime();
+    const db = new Date(b.closed_at || b.session_closed_at || 0).getTime();
+    return db - da;
+  });
+}
+
+async function getReportData() {
+  let reportRows = [];
+
+  const { data: rpcRows, error: reportError } = await supabaseClient.rpc("get_packing_report_rows");
+
+  if (reportError) {
+    console.warn("get_packing_report_rows nie działa, używam fallback SELECT:", reportError.message);
+    reportRows = await fetchAllSessionsFallback();
+  } else {
+    reportRows = rpcRows || [];
+  }
+
+  let brakiRows = [];
+
+  const { data: brakiData, error: brakiError } = await supabaseClient.rpc("get_braki_report");
 
   if (brakiError) {
-    throw new Error(brakiError.message);
+    console.warn("get_braki_report nie działa, używam filtrowania po statusie BRAKI:", brakiError.message);
+    brakiRows = reportRows.filter(x => normalizeStatus(x.status) === "BRAKI");
+  } else {
+    brakiRows = brakiData || [];
   }
+
+  const sessions = mergeSessionsWithBraki(reportRows, brakiRows);
 
   const { data: bagCount, error: bagCountError } = await supabaseClient.rpc("count_unique_bags");
 
@@ -1168,8 +1233,8 @@ async function getReportData() {
     .maybeSingle();
 
   return {
-    sessions: sessions || [],
-    brakiRows: brakiRows || [],
+    sessions,
+    brakiRows,
     totalBagsInPlan: bagCount || 0,
     mealDate: mealDateRow?.value || ""
   };
@@ -1285,31 +1350,45 @@ async function exportExcel() {
       x.closed_at ? new Date(x.closed_at).toLocaleString("pl-PL") : ""
     ]);
 
+    const brakiSessionIds = new Set(
+      data
+        .filter(x => normalizeStatus(x.status) === "BRAKI")
+        .map(x => x.id || x.session_id)
+    );
+
+    const brakiExportRows = brakiRows.length
+      ? brakiRows.filter(x => brakiSessionIds.has(x.id || x.session_id))
+      : data.filter(x => normalizeStatus(x.status) === "BRAKI");
+
     const brakiSheetRows = [
       ["BRAKI / DO DOPAKOWANIA"],
       ["Dzień jedzony", formatDatePL(report.mealDate)],
       [],
       [
         "QR torby",
-        "Posiłek",
-        "Kod",
-        "Rozmiar",
-        "QR tacki",
-        "Nazwa dania",
-        "Oznaczył brak",
-        "Kiedy oznaczono",
-        "Sesja zamknięta"
+        "Status",
+        "Pracownik / stanowisko",
+        "Postęp",
+        "Liczba brakujących",
+        "Brakujące tacki",
+        "Wszystkie skany",
+        "Błędne tacki",
+        "Duplikaty",
+        "Czas pakowania",
+        "Data zamknięcia"
       ],
-      ...brakiRows.map(x => [
+      ...brakiExportRows.map(x => [
         x.bag_qr || "",
-        x.meal || "",
-        x.code || "",
-        x.size || "",
-        x.tray_qr || "",
-        x.dish_name || "",
-        displayLogin(x.missing_by_email || ""),
-        x.missing_at ? new Date(x.missing_at).toLocaleString("pl-PL") : "",
-        x.session_closed_at ? new Date(x.session_closed_at).toLocaleString("pl-PL") : ""
+        normalizeStatus(x.status) || "BRAKI",
+        displayLogin(x.user_login || ""),
+        `${x.correct_count || 0}/${x.expected_count || 0}`,
+        x.missing_count || splitItems(x.missing_trays).length || 0,
+        x.missing_trays || "",
+        x.all_scans || "",
+        x.wrong_trays || "",
+        x.duplicate_trays || "",
+        formatDuration(x.duration_seconds),
+        x.closed_at ? new Date(x.closed_at).toLocaleString("pl-PL") : ""
       ])
     ];
 
@@ -1378,8 +1457,8 @@ async function exportExcel() {
     historySheet["!freeze"] = { xSplit: 0, ySplit: 1 };
 
     const brakiSheet = sheetFromRows(brakiSheetRows);
-    setColumnWidths(brakiSheet, [24, 18, 18, 14, 28, 45, 24, 24, 24]);
-    setAutoFilter(brakiSheet, "A4:I4");
+    setColumnWidths(brakiSheet, [24, 16, 28, 16, 18, 40, 55, 35, 35, 18, 24]);
+    setAutoFilter(brakiSheet, "A4:K4");
     brakiSheet["!freeze"] = { xSplit: 0, ySplit: 4 };
 
     XLSX.utils.book_append_sheet(workbook, summarySheet, "Podsumowanie");
@@ -1394,7 +1473,7 @@ async function exportExcel() {
     lastReportExportAt = new Date();
 
     setSessionsStatus(
-      `✅ Raport Excel wygenerowany.\nWpisów w raporcie: ${total}\nPoprawne: ${correct}\nNiepoprawne: ${bad}\nBraki: ${braki}\nDodano zakładkę Braki.`,
+      `✅ Raport Excel wygenerowany.\nDzień jedzony: ${formatDatePL(report.mealDate)}\nWpisów w raporcie: ${total}\nPoprawne: ${correct}\nNiepoprawne: ${bad}\nBraki: ${braki}\nDodano zakładkę Braki.`,
       "ok"
     );
 
@@ -1468,6 +1547,7 @@ async function resetDay() {
 
     el("fileInput").value = "";
     el("mealDateInput").value = "";
+    setMealDateStatus("Dzień jedzony: nieustawiony.", "warn");
 
     setSessionsStatus("✅ Reset dnia wykonany. Możesz wgrać nowy plan CSV.", "ok");
 
