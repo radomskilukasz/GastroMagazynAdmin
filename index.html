@@ -8,7 +8,7 @@
 <title>Panel administratora</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 
 <style>
 :root {
@@ -459,12 +459,14 @@ tr:last-child td { border-bottom:none; }
   margin:18px 0;
 }
 
-.qrCanvasBox canvas {
+.qrCanvasBox canvas,
+.qrCanvasBox img,
+.qrCanvasBox svg {
   width:280px !important;
   height:280px !important;
   max-width:100%;
+  display:block;
 }
-
 .qrTokenText {
   background:#f9fafb;
   border:1px solid var(--border);
@@ -887,6 +889,7 @@ let lastReportExportAt = null;
 let qrUsersCache = [];
 let currentQrToken = "";
 let currentQrEmail = "";
+let currentQrSvg = "";
 
 const el = id => document.getElementById(id);
 
@@ -2402,7 +2405,18 @@ async function generateQrLoginForUser() {
     el("qrGenerateButton").disabled = false;
   }
 }
+function makeQrSvg(token, cellSize = 8, margin = 2) {
+  if (!window.qrcode) {
+    throw new Error("Biblioteka qrcode-generator nie wczytała się.");
+  }
 
+  const qr = window.qrcode(0, "M");
+  qr.addData(String(token));
+  qr.make();
+
+  return qr.createSvgTag(cellSize, margin);
+}
+  
 async function renderQrCode(token, email) {
   currentQrToken = token;
   currentQrEmail = email;
@@ -2413,26 +2427,29 @@ async function renderQrCode(token, email) {
   const box = el("qrCanvasBox");
   box.innerHTML = "";
 
-  if (!window.QRCode || !window.QRCode.toCanvas) {
+  try {
+    currentQrSvg = makeQrSvg(token, 8, 2);
+    box.innerHTML = currentQrSvg;
+
+    const svg = box.querySelector("svg");
+    if (svg) {
+      svg.style.width = "280px";
+      svg.style.height = "280px";
+      svg.style.display = "block";
+      svg.style.margin = "0 auto";
+    }
+
+    el("qrTokenText").innerText =
+      "Użytkownik: " + displayLogin(email) +
+      "\nToken QR: " + token;
+
+  } catch (err) {
+    currentQrSvg = "";
+    box.innerHTML = "";
     el("qrTokenText").innerText = "Token QR:\n" + token;
-    setQrStatus("⚠️ Token wygenerowany, ale biblioteka QRCode nie wczytała się. Sprawdź internet/CDN.", "warn");
-    return;
+    setQrStatus("❌ Token wygenerowany, ale nie udało się narysować QR: " + err.message, "bad");
   }
-
-  const canvas = document.createElement("canvas");
-  box.appendChild(canvas);
-
-  await window.QRCode.toCanvas(canvas, token, {
-    width: 280,
-    margin: 2,
-    errorCorrectionLevel: "M"
-  });
-
-  el("qrTokenText").innerText =
-    "Użytkownik: " + displayLogin(email) +
-    "\nToken QR: " + token;
 }
-
 async function disableQrLoginForUser() {
   const email = getEmail(el("qrUserLogin").value);
 
@@ -2495,9 +2512,19 @@ function printCurrentQr() {
     return;
   }
 
+  let qrSvg = currentQrSvg;
+
+  try {
+    if (!qrSvg) {
+      qrSvg = makeQrSvg(currentQrToken, 8, 2);
+    }
+  } catch (err) {
+    setQrStatus("❌ Nie udało się przygotować QR do druku: " + err.message, "bad");
+    return;
+  }
+
   const safeUser = escapeHtml(displayLogin(currentQrEmail));
   const safeToken = escapeHtml(currentQrToken);
-  const tokenJson = JSON.stringify(currentQrToken);
 
   const printWindow = window.open("", "_blank", "width=720,height=900");
 
@@ -2512,7 +2539,6 @@ function printCurrentQr() {
     <head>
       <meta charset="UTF-8">
       <title>QR logowania</title>
-      <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"><\/script>
       <style>
         body {
           font-family: Arial, sans-serif;
@@ -2548,9 +2574,17 @@ function printCurrentQr() {
           word-break: break-word;
         }
 
-        canvas {
+        .qrBox {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          margin: 18px 0;
+        }
+
+        .qrBox svg {
           width: 300px !important;
           height: 300px !important;
+          display: block;
         }
 
         .hint {
@@ -2578,24 +2612,23 @@ function printCurrentQr() {
         <img src="logo.png" class="logo" onerror="this.style.display='none'">
         <h1>Kod QR logowania</h1>
         <div class="login">${safeUser}</div>
-        <canvas id="printQr"></canvas>
+
+        <div class="qrBox">
+          ${qrSvg}
+        </div>
+
         <div class="hint">
           Zeskanuj kod QR na ekranie logowania programu pakowania lub kontroli.
           Login i hasło nadal działają awaryjnie.
         </div>
+
         <div class="token">${safeToken}</div>
       </div>
 
       <script>
-        QRCode.toCanvas(document.getElementById("printQr"), ${tokenJson}, {
-          width: 300,
-          margin: 2,
-          errorCorrectionLevel: "M"
-        }).then(function() {
-          setTimeout(function() {
-            window.print();
-          }, 300);
-        });
+        setTimeout(function() {
+          window.print();
+        }, 300);
       <\/script>
     </body>
     </html>
