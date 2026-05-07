@@ -2293,9 +2293,10 @@ function qrRowRole(row) {
 }
 
 function qrRowActive(row) {
+  if (typeof row.qr_active === "boolean") return row.qr_active;
   if (typeof row.is_active === "boolean") return row.is_active;
   if (typeof row.active === "boolean") return row.active;
-  if (row.disabled_at) return false;
+  if (row.qr_disabled_at || row.disabled_at) return false;
   return true;
 }
 
@@ -2304,11 +2305,11 @@ function qrRowHint(row) {
 }
 
 function qrRowLastUsed(row) {
-  return row.last_used_at || row.used_at || null;
+  return row.qr_last_used_at || row.last_used_at || row.used_at || null;
 }
 
 function qrRowCreatedAt(row) {
-  return row.created_at || row.generated_at || null;
+  return row.qr_regenerated_at || row.qr_created_at || row.created_at || row.generated_at || null;
 }
 
 async function callRpcWithFallbacks(functionName, argsList) {
@@ -2331,16 +2332,16 @@ async function loadQrTokens() {
   const table = el("qrTokensTable");
   if (!table || !supabaseClient) return;
 
-  const { data, error } = await callRpcWithFallbacks("admin_list_qr_login_tokens", [
-    {},
-    { include_disabled: true },
-    { target_include_disabled: true }
-  ]);
+  const { data, error } = await supabaseClient.rpc("admin_list_qr_users");
 
   if (error) {
     table.innerHTML = `<div style="padding:18px;color:#991b1b;">Nie udało się pobrać kodów QR: ${escapeHtml(error.message)}</div>`;
     return;
   }
+
+  qrTokensCache = data || [];
+  renderQrTokens(qrTokensCache);
+}
 
   qrTokensCache = data || [];
   renderQrTokens(qrTokensCache);
@@ -2425,7 +2426,7 @@ async function generateQrLoginForUser() {
   const choice = await showChoiceModal({
     title: "🔳 Wygenerować kod QR?",
     text: "Wygenerowanie nowego kodu QR zastąpi poprzedni kod tego użytkownika.",
-    details: `Użytkownik: <b>${escapeHtml(email)}</b><br><br>Po wygenerowaniu od razu wydrukuj kartę QR. Ze względów bezpieczeństwa pełny token pokazujemy tylko teraz.`,
+    details: `Użytkownik: <b>${escapeHtml(email)}</b><br><br>Po wygenerowaniu od razu wydrukuj kartę QR. Pełny token pokazujemy tylko teraz.`,
     buttons: [
       { label:"Anuluj", value:"cancel", className:"btnCancel" },
       { label:"Wygeneruj nowy kod QR", value:"generate", className:"btnAnother" }
@@ -2438,33 +2439,40 @@ async function generateQrLoginForUser() {
   el("qrGenerateButton").disabled = true;
 
   try {
-    const { data, error } = await callRpcWithFallbacks("admin_generate_qr_login_token", [
-      { target_user_email: email },
-      { user_email: email },
-      { target_email: email },
-      { p_email: email }
-    ]);
+    const { data, error } = await supabaseClient.rpc("admin_regenerate_user_qr", {
+      target_user_email: email
+    });
 
     if (error) {
       setQrStatus("❌ Nie udało się wygenerować QR: " + error.message, "bad");
       return;
     }
 
-    const token = extractQrTokenFromRpc(data);
+    const row = data && data.length ? data[0] : null;
+
+    if (!row || row.status !== "OK") {
+      setQrStatus("❌ Nie udało się wygenerować QR: " + (row?.status || "brak odpowiedzi z bazy"), "bad");
+      await loadQrTokens();
+      return;
+    }
+
+    const token = row.qr_token;
 
     if (!token) {
-      setQrStatus("❌ Wygenerowano wpis, ale RPC nie zwróciło tokenu do wydrukowania.", "bad");
+      setQrStatus("❌ Wygenerowano wpis, ale baza nie zwróciła tokenu do wydrukowania.", "bad");
       await loadQrTokens();
       return;
     }
 
     lastGeneratedQrToken = token;
-    lastGeneratedQrEmail = email;
+    lastGeneratedQrEmail = row.user_email || email;
 
-    await renderGeneratedQr(email, token);
+    await renderGeneratedQr(lastGeneratedQrEmail, token);
 
     setQrStatus(
-      "✅ Kod QR wygenerowany dla: " + email + "\nWydrukuj kartę teraz. Po odświeżeniu strony pełny token nie będzie już dostępny.",
+      "✅ Kod QR wygenerowany dla: " + lastGeneratedQrEmail +
+      "\nRola: " + (row.user_role || "-") +
+      "\nWydrukuj kartę teraz. Po odświeżeniu strony pełny token nie będzie już dostępny.",
       "ok"
     );
 
@@ -2476,7 +2484,6 @@ async function generateQrLoginForUser() {
     el("qrGenerateButton").disabled = false;
   }
 }
-
 async function renderGeneratedQr(email, token) {
   el("qrPrintArea").classList.remove("hidden");
   el("qrPrintUser").innerText = displayLogin(email);
@@ -2520,20 +2527,17 @@ async function disableQrLoginForUser() {
   el("qrDisableButton").disabled = true;
 
   try {
-    const { data, error } = await callRpcWithFallbacks("admin_disable_qr_login_token", [
-      { target_user_email: email },
-      { user_email: email },
-      { target_email: email },
-      { p_email: email }
-    ]);
+    const { data, error } = await supabaseClient.rpc("admin_disable_user_qr", {
+      target_user_email: email
+    });
 
     if (error) {
       setQrStatus("❌ Nie udało się wyłączyć QR: " + error.message, "bad");
       return;
     }
 
-    if (data && data !== "OK" && typeof data === "string") {
-      setQrStatus("⚠️ Wynik: " + data, data.includes("OK") ? "ok" : "warn");
+    if (data !== "OK") {
+      setQrStatus("⚠️ Wynik: " + data, data === "OK" ? "ok" : "warn");
     } else {
       setQrStatus("✅ Kod QR wyłączony dla: " + email, "ok");
     }
