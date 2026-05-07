@@ -8,6 +8,7 @@
 <title>Panel administratora</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 
 <style>
 :root {
@@ -497,6 +498,60 @@ tr:last-child td { border-bottom:none; }
   border:none;
 }
 
+.qrGrid {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 260px 260px;
+  gap:12px;
+}
+
+.qrPrintArea {
+  background:white;
+  border:2px dashed var(--border-dark);
+  border-radius:22px;
+  padding:22px;
+  text-align:center;
+}
+
+.qrCardTitle {
+  font-size:22px;
+  font-weight:900;
+  margin-bottom:8px;
+}
+
+.qrCardUser {
+  font-size:28px;
+  font-weight:900;
+  word-break:break-word;
+  margin-bottom:12px;
+}
+
+.qrCardHint {
+  color:var(--muted);
+  font-size:14px;
+  line-height:1.45;
+  margin-top:12px;
+}
+
+.qrCanvasWrap {
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  padding:12px;
+}
+
+.qrCanvasWrap canvas {
+  width:260px !important;
+  height:260px !important;
+  max-width:100%;
+}
+
+.qrTokenHint {
+  font-size:13px;
+  color:var(--muted);
+  word-break:break-word;
+  margin-top:8px;
+}
+
 @media(max-width:1100px){
   body { padding:14px; }
 
@@ -518,7 +573,8 @@ tr:last-child td { border-bottom:none; }
   .userBox,
   .userCreateBox,
   .stationActionBox,
-  .statsGrid {
+  .statsGrid,
+  .qrGrid {
     grid-template-columns:1fr;
   }
 
@@ -757,6 +813,57 @@ tr:last-child td { border-bottom:none; }
       </div>
     </section>
 
+    <section class="adminSection fullWidth">
+      <div class="sectionHeader">
+        <div>
+          <h2>🔳 Kody QR logowania</h2>
+          <div class="sectionHint">
+            Generuj kody QR dla workerów i managerów. Admin nadal loguje się loginem i hasłem.
+          </div>
+        </div>
+      </div>
+
+      <div class="sectionBody">
+        <div class="actionStack">
+
+          <div class="adminTip">
+            Wygenerowanie nowego kodu QR dla użytkownika zastępuje poprzedni kod.
+            Jeśli pracownik zgubi kartkę z QR, wygeneruj nowy albo wyłącz obecny.
+          </div>
+
+          <div class="qrGrid">
+            <input id="qrUserLogin" list="usersList" placeholder="login lub email użytkownika">
+            <button id="qrGenerateButton">🔳 Wygeneruj / wymień QR</button>
+            <button id="qrDisableButton" class="danger">🚫 Wyłącz QR</button>
+          </div>
+
+          <p id="qrStatus" class="statusBox info">Status QR: gotowy.</p>
+
+          <div id="qrPrintArea" class="qrPrintArea hidden">
+            <div class="qrCardTitle">Kod logowania QR</div>
+            <div class="qrCardUser" id="qrPrintUser">-</div>
+            <div class="qrCanvasWrap">
+              <canvas id="qrCanvas"></canvas>
+            </div>
+            <div class="qrCardHint">
+              Zeskanuj ten kod na ekranie logowania programu pakowania lub kontroli.
+              Login i hasło nadal działają awaryjnie.
+            </div>
+            <div class="qrTokenHint" id="qrTokenHint"></div>
+            <div style="margin-top:14px;">
+              <button id="qrPrintButton" class="darkBtn">🖨️ Drukuj kartę QR</button>
+            </div>
+          </div>
+
+          <div class="subPanel">
+            <h3 class="subPanelTitle">Aktywne i wyłączone kody QR</h3>
+            <div id="qrTokensTable" class="tableWrap"></div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
   </div>
 </div>
 
@@ -792,6 +899,10 @@ let operationalSnapshot = null;
 let reportExportedThisSession = false;
 let lastReportExportAt = null;
 
+let qrTokensCache = [];
+let lastGeneratedQrToken = "";
+let lastGeneratedQrEmail = "";
+
 const el = id => document.getElementById(id);
 
 function setLoginStatus(text, type = "info") { setBox("loginStatus", text, type); }
@@ -803,6 +914,7 @@ function setStationStatus(text, type = "info") { setBox("stationStatus", text, t
 function setLoginsStatus(text, type = "info") { setBox("loginsStatus", text, type); }
 function setOperationalStatus(text, type = "info") { setBox("operationalStatus", text, type); }
 function setMealDateStatus(text, type = "info") { setBox("mealDateStatus", text, type); }
+function setQrStatus(text, type = "info") { setBox("qrStatus", text, type); }
 
 function setBox(id, text, type = "info") {
   const box = el(id);
@@ -1042,7 +1154,8 @@ async function refreshAdminData() {
     loadMealDate(),
     loadStationOverview(),
     loadActiveLogins(),
-    loadOperationalStatus()
+    loadOperationalStatus(),
+    loadQrTokens()
   ]);
 }
 
@@ -1716,6 +1829,7 @@ async function setUserRole() {
 
   setRoleStatus("✅ Nadano rolę: " + role + " dla " + email, "ok");
   await loadUsersList();
+  await loadQrTokens();
 }
 
 async function callAdminFunction(functionName, payload) {
@@ -1768,6 +1882,7 @@ async function createUser() {
     el("newUserLogin").value = "";
     el("newUserPassword").value = "";
     await loadUsersList();
+    await loadQrTokens();
   } catch (err) {
     setUserStatus("❌ Nie udało się dodać użytkownika: " + err.message, "bad");
   }
@@ -1801,6 +1916,7 @@ async function deleteUser() {
     el("deleteUserLogin").value = "";
     await loadUsersList();
     await loadActiveLogins();
+    await loadQrTokens();
   } catch (err) {
     setUserStatus("❌ Nie udało się usunąć użytkownika: " + err.message, "bad");
   }
@@ -2145,6 +2261,411 @@ async function forceLogoutUser(index) {
   await loadActiveLogins();
 }
 
+function extractQrTokenFromRpc(data) {
+  if (!data) return "";
+
+  if (typeof data === "string") {
+    const value = data.trim();
+    if (value.startsWith("OK:")) return value.slice(3).trim();
+    return value;
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) return "";
+
+  return String(
+    row.raw_token ||
+    row.token ||
+    row.qr_token ||
+    row.login_token ||
+    row.plain_token ||
+    row.new_token ||
+    ""
+  ).trim();
+}
+
+function qrRowEmail(row) {
+  return row.user_email || row.email || row.target_email || "";
+}
+
+function qrRowRole(row) {
+  return row.user_role || row.role || "-";
+}
+
+function qrRowActive(row) {
+  if (typeof row.is_active === "boolean") return row.is_active;
+  if (typeof row.active === "boolean") return row.active;
+  if (row.disabled_at) return false;
+  return true;
+}
+
+function qrRowHint(row) {
+  return row.token_hint || row.qr_hint || row.hint || "-";
+}
+
+function qrRowLastUsed(row) {
+  return row.last_used_at || row.used_at || null;
+}
+
+function qrRowCreatedAt(row) {
+  return row.created_at || row.generated_at || null;
+}
+
+async function callRpcWithFallbacks(functionName, argsList) {
+  let lastError = null;
+
+  for (const args of argsList) {
+    const { data, error } = await supabaseClient.rpc(functionName, args);
+
+    if (!error) {
+      return { data, error:null };
+    }
+
+    lastError = error;
+  }
+
+  return { data:null, error:lastError };
+}
+
+async function loadQrTokens() {
+  const table = el("qrTokensTable");
+  if (!table || !supabaseClient) return;
+
+  const { data, error } = await callRpcWithFallbacks("admin_list_qr_login_tokens", [
+    {},
+    { include_disabled: true },
+    { target_include_disabled: true }
+  ]);
+
+  if (error) {
+    table.innerHTML = `<div style="padding:18px;color:#991b1b;">Nie udało się pobrać kodów QR: ${escapeHtml(error.message)}</div>`;
+    return;
+  }
+
+  qrTokensCache = data || [];
+  renderQrTokens(qrTokensCache);
+}
+
+function renderQrTokens(rows) {
+  if (!rows.length) {
+    el("qrTokensTable").innerHTML = `<div style="padding:18px;color:#6b7280;">Brak wygenerowanych kodów QR.</div>`;
+    return;
+  }
+
+  el("qrTokensTable").innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Użytkownik</th>
+          <th>Rola</th>
+          <th>Status</th>
+          <th>Hint tokenu</th>
+          <th>Utworzono</th>
+          <th>Ostatnie użycie</th>
+          <th>Akcje</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((row, index) => {
+          const email = qrRowEmail(row);
+          const active = qrRowActive(row);
+
+          return `
+            <tr class="${active ? "" : "badRow"}">
+              <td><b>${escapeHtml(displayLogin(email || "-"))}</b></td>
+              <td>${escapeHtml(qrRowRole(row))}</td>
+              <td>
+                <span class="badge ${active ? "badgeOk" : "badgeBad"}">
+                  ${active ? "AKTYWNY" : "WYŁĄCZONY"}
+                </span>
+              </td>
+              <td>${escapeHtml(qrRowHint(row))}</td>
+              <td>${formatDateTimePL(qrRowCreatedAt(row))}</td>
+              <td>${formatDateTimePL(qrRowLastUsed(row))}</td>
+              <td>
+                <div style="display:flex;gap:8px;min-width:250px;">
+                  <button class="smallBtn lightBtn" onclick="fillQrUserFromTable(${index})">Wybierz</button>
+                  <button class="smallBtn danger" onclick="disableQrFromTable(${index})">Wyłącz</button>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function fillQrUserFromTable(index) {
+  const row = qrTokensCache[index];
+  if (!row) return;
+
+  const email = qrRowEmail(row);
+  el("qrUserLogin").value = email;
+  setQrStatus("Wybrano użytkownika: " + displayLogin(email), "info");
+}
+
+async function disableQrFromTable(index) {
+  const row = qrTokensCache[index];
+  if (!row) return;
+
+  const email = qrRowEmail(row);
+  el("qrUserLogin").value = email;
+  await disableQrLoginForUser();
+}
+
+async function generateQrLoginForUser() {
+  const email = getEmail(el("qrUserLogin").value);
+
+  if (!email) {
+    setQrStatus("❌ Wpisz login lub email użytkownika.", "bad");
+    return;
+  }
+
+  const choice = await showChoiceModal({
+    title: "🔳 Wygenerować kod QR?",
+    text: "Wygenerowanie nowego kodu QR zastąpi poprzedni kod tego użytkownika.",
+    details: `Użytkownik: <b>${escapeHtml(email)}</b><br><br>Po wygenerowaniu od razu wydrukuj kartę QR. Ze względów bezpieczeństwa pełny token pokazujemy tylko teraz.`,
+    buttons: [
+      { label:"Anuluj", value:"cancel", className:"btnCancel" },
+      { label:"Wygeneruj nowy kod QR", value:"generate", className:"btnAnother" }
+    ]
+  });
+
+  if (choice !== "generate") return;
+
+  setQrStatus("⏳ Generuję kod QR...", "info");
+  el("qrGenerateButton").disabled = true;
+
+  try {
+    const { data, error } = await callRpcWithFallbacks("admin_generate_qr_login_token", [
+      { target_user_email: email },
+      { user_email: email },
+      { target_email: email },
+      { p_email: email }
+    ]);
+
+    if (error) {
+      setQrStatus("❌ Nie udało się wygenerować QR: " + error.message, "bad");
+      return;
+    }
+
+    const token = extractQrTokenFromRpc(data);
+
+    if (!token) {
+      setQrStatus("❌ Wygenerowano wpis, ale RPC nie zwróciło tokenu do wydrukowania.", "bad");
+      await loadQrTokens();
+      return;
+    }
+
+    lastGeneratedQrToken = token;
+    lastGeneratedQrEmail = email;
+
+    await renderGeneratedQr(email, token);
+
+    setQrStatus(
+      "✅ Kod QR wygenerowany dla: " + email + "\nWydrukuj kartę teraz. Po odświeżeniu strony pełny token nie będzie już dostępny.",
+      "ok"
+    );
+
+    await loadQrTokens();
+
+  } catch (err) {
+    setQrStatus("❌ Błąd generowania QR: " + err.message, "bad");
+  } finally {
+    el("qrGenerateButton").disabled = false;
+  }
+}
+
+async function renderGeneratedQr(email, token) {
+  el("qrPrintArea").classList.remove("hidden");
+  el("qrPrintUser").innerText = displayLogin(email);
+  el("qrTokenHint").innerText = "Hint: " + token.slice(0, 6) + "..." + token.slice(-6);
+
+  const canvas = el("qrCanvas");
+
+  if (!window.QRCode || !window.QRCode.toCanvas) {
+    setQrStatus("❌ Biblioteka QRCode nie wczytała się. Sprawdź internet/CDN.", "bad");
+    return;
+  }
+
+  await window.QRCode.toCanvas(canvas, token, {
+    errorCorrectionLevel: "M",
+    margin: 2,
+    width: 280
+  });
+}
+
+async function disableQrLoginForUser() {
+  const email = getEmail(el("qrUserLogin").value);
+
+  if (!email) {
+    setQrStatus("❌ Wpisz login lub email użytkownika.", "bad");
+    return;
+  }
+
+  const choice = await showChoiceModal({
+    title: "🚫 Wyłączyć kod QR?",
+    text: "Użytkownik nie zaloguje się już tym kodem QR. Login i hasło dalej będą działały.",
+    details: `Użytkownik: <b>${escapeHtml(email)}</b>`,
+    buttons: [
+      { label:"Anuluj", value:"cancel", className:"btnCancel" },
+      { label:"Wyłącz QR", value:"disable", className:"btnReplace" }
+    ]
+  });
+
+  if (choice !== "disable") return;
+
+  setQrStatus("⏳ Wyłączam QR...", "info");
+  el("qrDisableButton").disabled = true;
+
+  try {
+    const { data, error } = await callRpcWithFallbacks("admin_disable_qr_login_token", [
+      { target_user_email: email },
+      { user_email: email },
+      { target_email: email },
+      { p_email: email }
+    ]);
+
+    if (error) {
+      setQrStatus("❌ Nie udało się wyłączyć QR: " + error.message, "bad");
+      return;
+    }
+
+    if (data && data !== "OK" && typeof data === "string") {
+      setQrStatus("⚠️ Wynik: " + data, data.includes("OK") ? "ok" : "warn");
+    } else {
+      setQrStatus("✅ Kod QR wyłączony dla: " + email, "ok");
+    }
+
+    if (lastGeneratedQrEmail === email) {
+      lastGeneratedQrToken = "";
+      lastGeneratedQrEmail = "";
+      el("qrPrintArea").classList.add("hidden");
+    }
+
+    await loadQrTokens();
+
+  } catch (err) {
+    setQrStatus("❌ Błąd wyłączania QR: " + err.message, "bad");
+  } finally {
+    el("qrDisableButton").disabled = false;
+  }
+}
+
+function printGeneratedQr() {
+  if (!lastGeneratedQrToken || !lastGeneratedQrEmail) {
+    setQrStatus("❌ Najpierw wygeneruj kod QR.", "bad");
+    return;
+  }
+
+  const canvas = el("qrCanvas");
+  const qrImage = canvas.toDataURL("image/png");
+  const user = displayLogin(lastGeneratedQrEmail);
+  const tokenHint = lastGeneratedQrToken.slice(0, 6) + "..." + lastGeneratedQrToken.slice(-6);
+
+  const win = window.open("", "_blank", "width=700,height=900");
+
+  if (!win) {
+    setQrStatus("❌ Przeglądarka zablokowała okno drukowania. Zezwól na wyskakujące okna.", "bad");
+    return;
+  }
+
+  win.document.write(`
+    <!DOCTYPE html>
+    <html lang="pl">
+    <head>
+      <meta charset="UTF-8">
+      <title>Kod QR logowania</title>
+      <style>
+        body {
+          font-family: Arial, sans-serif;
+          margin: 0;
+          padding: 30px;
+          color: #111827;
+        }
+
+        .card {
+          width: 420px;
+          border: 3px solid #111827;
+          border-radius: 22px;
+          padding: 24px;
+          text-align: center;
+          page-break-inside: avoid;
+        }
+
+        .logo {
+          width: 80px;
+          height: auto;
+          margin-bottom: 8px;
+        }
+
+        h1 {
+          font-size: 24px;
+          margin: 0 0 10px;
+        }
+
+        .user {
+          font-size: 32px;
+          font-weight: 900;
+          margin: 12px 0;
+          word-break: break-word;
+        }
+
+        .qr {
+          width: 280px;
+          height: 280px;
+          margin: 12px auto;
+          display: block;
+        }
+
+        .hint {
+          color: #374151;
+          font-size: 15px;
+          line-height: 1.45;
+          margin-top: 14px;
+        }
+
+        .small {
+          color: #6b7280;
+          font-size: 12px;
+          margin-top: 12px;
+          word-break: break-word;
+        }
+
+        @media print {
+          body { padding: 0; }
+          .card { margin: 0; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <img src="logo.png" class="logo" onerror="this.style.display='none'">
+        <h1>Kod QR logowania</h1>
+        <div class="user">${escapeHtml(user)}</div>
+        <img class="qr" src="${qrImage}">
+        <div class="hint">
+          Zeskanuj kod QR na ekranie logowania programu pakowania lub kontroli.
+          Login i hasło nadal działają awaryjnie.
+        </div>
+        <div class="small">Hint tokenu: ${escapeHtml(tokenHint)}</div>
+      </div>
+
+      <script>
+        window.onload = function() {
+          setTimeout(function() {
+            window.print();
+          }, 300);
+        };
+      <\/script>
+    </body>
+    </html>
+  `);
+
+  win.document.close();
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   if (!window.supabase) {
     setLoginStatus("❌ Biblioteka Supabase się nie wczytała. Sprawdź internet.", "bad");
@@ -2165,12 +2686,20 @@ window.addEventListener("DOMContentLoaded", () => {
   el("clearAllQueuesButton").addEventListener("click", clearAllStationQueues);
   el("closeAllLinesButton").addEventListener("click", closeAllStationLines);
 
+  el("qrGenerateButton").addEventListener("click", generateQrLoginForUser);
+  el("qrDisableButton").addEventListener("click", disableQrLoginForUser);
+  el("qrPrintButton").addEventListener("click", printGeneratedQr);
+
   el("adminLogin").addEventListener("keydown", e => {
     if (e.key === "Enter") el("adminPassword").focus();
   });
 
   el("adminPassword").addEventListener("keydown", e => {
     if (e.key === "Enter") adminLogin();
+  });
+
+  el("qrUserLogin").addEventListener("keydown", e => {
+    if (e.key === "Enter") generateQrLoginForUser();
   });
 });
 </script>
