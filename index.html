@@ -817,15 +817,12 @@ tr:last-child td { border-bottom:none; }
       <div class="sectionHeader">
         <div>
           <h2>🔳 Kody QR logowania</h2>
-          <div class="sectionHint">
-            Generuj kody QR dla workerów i managerów. Admin nadal loguje się loginem i hasłem.
-          </div>
+          <div class="sectionHint">Generuj kody QR dla workerów i managerów. Admin nadal loguje się loginem i hasłem.</div>
         </div>
       </div>
 
       <div class="sectionBody">
         <div class="actionStack">
-
           <div class="adminTip">
             Wygenerowanie nowego kodu QR dla użytkownika zastępuje poprzedni kod.
             Jeśli pracownik zgubi kartkę z QR, wygeneruj nowy albo wyłącz obecny.
@@ -856,10 +853,9 @@ tr:last-child td { border-bottom:none; }
           </div>
 
           <div class="subPanel">
-            <h3 class="subPanelTitle">Aktywne i wyłączone kody QR</h3>
+            <h3 class="subPanelTitle">Użytkownicy i kody QR</h3>
             <div id="qrTokensTable" class="tableWrap"></div>
           </div>
-
         </div>
       </div>
     </section>
@@ -1008,10 +1004,8 @@ function formatDateTimePL(dateText) {
 function formatDuration(seconds) {
   if (!seconds && seconds !== 0) return "-";
   if (seconds < 60) return seconds + "s";
-
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
-
   return m + "m " + s + "s";
 }
 
@@ -1242,7 +1236,6 @@ async function saveMealDate() {
   }
 
   setMealDateStatus("Dzień jedzony: " + formatDatePL(mealDate), "ok");
-
   return true;
 }
 
@@ -2261,71 +2254,40 @@ async function forceLogoutUser(index) {
   await loadActiveLogins();
 }
 
-function extractQrTokenFromRpc(data) {
-  if (!data) return "";
-
-  if (typeof data === "string") {
-    const value = data.trim();
-    if (value.startsWith("OK:")) return value.slice(3).trim();
-    return value;
-  }
-
-  const row = Array.isArray(data) ? data[0] : data;
-  if (!row) return "";
-
-  return String(
-    row.raw_token ||
-    row.token ||
-    row.qr_token ||
-    row.login_token ||
-    row.plain_token ||
-    row.new_token ||
-    ""
-  ).trim();
-}
-
 function qrRowEmail(row) {
-  return row.user_email || row.email || row.target_email || "";
+  return row.user_email || "";
 }
 
 function qrRowRole(row) {
-  return row.user_role || row.role || "-";
+  return row.user_role || "-";
 }
 
 function qrRowActive(row) {
-  if (typeof row.qr_active === "boolean") return row.qr_active;
-  if (typeof row.is_active === "boolean") return row.is_active;
-  if (typeof row.active === "boolean") return row.active;
-  if (row.qr_disabled_at || row.disabled_at) return false;
-  return true;
+  return Boolean(row.has_qr && row.qr_active);
+}
+
+function qrRowStatusText(row) {
+  if (!row.has_qr) return "BRAK QR";
+  if (row.qr_active) return "AKTYWNY";
+  return "WYŁĄCZONY";
+}
+
+function qrRowStatusClass(row) {
+  if (!row.has_qr) return "badgeMuted";
+  if (row.qr_active) return "badgeOk";
+  return "badgeBad";
 }
 
 function qrRowHint(row) {
-  return row.token_hint || row.qr_hint || row.hint || "-";
-}
-
-function qrRowLastUsed(row) {
-  return row.qr_last_used_at || row.last_used_at || row.used_at || null;
+  return row.token_hint || "-";
 }
 
 function qrRowCreatedAt(row) {
-  return row.qr_regenerated_at || row.qr_created_at || row.created_at || row.generated_at || null;
+  return row.qr_regenerated_at || row.qr_created_at || null;
 }
 
-async function callRpcWithFallbacks(functionName, argsList) {
-  let lastError = null;
-
-  for (const args of argsList) {
-    const { data, error } = await supabaseClient.rpc(functionName, args);
-
-    if (!error) {
-      return { data, error:null };
-    }
-
-    lastError = error;
-  }
-
-  return { data:null, error:lastError };
+function qrRowLastUsed(row) {
+  return row.qr_last_used_at || null;
 }
 
 async function loadQrTokens() {
@@ -2343,13 +2305,9 @@ async function loadQrTokens() {
   renderQrTokens(qrTokensCache);
 }
 
-  qrTokensCache = data || [];
-  renderQrTokens(qrTokensCache);
-}
-
 function renderQrTokens(rows) {
   if (!rows.length) {
-    el("qrTokensTable").innerHTML = `<div style="padding:18px;color:#6b7280;">Brak wygenerowanych kodów QR.</div>`;
+    el("qrTokensTable").innerHTML = `<div style="padding:18px;color:#6b7280;">Brak użytkowników lub brak danych QR.</div>`;
     return;
   }
 
@@ -2359,10 +2317,11 @@ function renderQrTokens(rows) {
         <tr>
           <th>Użytkownik</th>
           <th>Rola</th>
-          <th>Status</th>
+          <th>Status QR</th>
           <th>Hint tokenu</th>
-          <th>Utworzono</th>
+          <th>Utworzono / wymieniono</th>
           <th>Ostatnie użycie</th>
+          <th>Użyć</th>
           <th>Akcje</th>
         </tr>
       </thead>
@@ -2372,20 +2331,22 @@ function renderQrTokens(rows) {
           const active = qrRowActive(row);
 
           return `
-            <tr class="${active ? "" : "badRow"}">
+            <tr class="${!row.has_qr ? "" : active ? "" : "badRow"}">
               <td><b>${escapeHtml(displayLogin(email || "-"))}</b></td>
               <td>${escapeHtml(qrRowRole(row))}</td>
               <td>
-                <span class="badge ${active ? "badgeOk" : "badgeBad"}">
-                  ${active ? "AKTYWNY" : "WYŁĄCZONY"}
+                <span class="badge ${qrRowStatusClass(row)}">
+                  ${escapeHtml(qrRowStatusText(row))}
                 </span>
               </td>
               <td>${escapeHtml(qrRowHint(row))}</td>
               <td>${formatDateTimePL(qrRowCreatedAt(row))}</td>
               <td>${formatDateTimePL(qrRowLastUsed(row))}</td>
+              <td>${Number(row.qr_use_count || 0)}</td>
               <td>
-                <div style="display:flex;gap:8px;min-width:250px;">
+                <div style="display:flex;gap:8px;min-width:300px;">
                   <button class="smallBtn lightBtn" onclick="fillQrUserFromTable(${index})">Wybierz</button>
+                  <button class="smallBtn btnAnother" onclick="generateQrFromTable(${index})">Generuj</button>
                   <button class="smallBtn danger" onclick="disableQrFromTable(${index})">Wyłącz</button>
                 </div>
               </td>
@@ -2404,6 +2365,15 @@ function fillQrUserFromTable(index) {
   const email = qrRowEmail(row);
   el("qrUserLogin").value = email;
   setQrStatus("Wybrano użytkownika: " + displayLogin(email), "info");
+}
+
+async function generateQrFromTable(index) {
+  const row = qrTokensCache[index];
+  if (!row) return;
+
+  const email = qrRowEmail(row);
+  el("qrUserLogin").value = email;
+  await generateQrLoginForUser();
 }
 
 async function disableQrFromTable(index) {
@@ -2484,6 +2454,7 @@ async function generateQrLoginForUser() {
     el("qrGenerateButton").disabled = false;
   }
 }
+
 async function renderGeneratedQr(email, token) {
   el("qrPrintArea").classList.remove("hidden");
   el("qrPrintUser").innerText = displayLogin(email);
