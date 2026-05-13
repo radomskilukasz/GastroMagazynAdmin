@@ -719,8 +719,7 @@ async function resetDay() {
 
   if (!mealDate) {
     setSessionsStatus(
-      "❌ Nie można zamknąć dnia, bo nie ustawiono dnia jedzonego.
-Archiwum jest zapisywane wyłącznie po meal_date, więc najpierw ustaw dzień jedzony.",
+      "❌ Nie można zamknąć dnia, bo nie ustawiono dnia jedzonego.\nArchiwum jest zapisywane wyłącznie po meal_date, więc najpierw ustaw dzień jedzony.",
       "bad"
     );
     return;
@@ -776,8 +775,7 @@ Archiwum jest zapisywane wyłącznie po meal_date, więc najpierw ustaw dzień j
 
     if (data === "NO_MEAL_DATE") {
       setSessionsStatus(
-        "❌ Reset zatrzymany. Brakuje dnia jedzonego / meal_date.
-Ustaw dzień jedzony i spróbuj ponownie.",
+        "❌ Reset zatrzymany. Brakuje dnia jedzonego / meal_date.\nUstaw dzień jedzony i spróbuj ponownie.",
         "bad"
       );
       return;
@@ -785,8 +783,7 @@ Ustaw dzień jedzony i spróbuj ponownie.",
 
     if (data === "ALREADY_ARCHIVED") {
       setSessionsStatus(
-        "⚠️ Reset zatrzymany. Ten dzień jedzony jest już w archiwum.
-System nie wyczyścił danych, żeby nie ryzykować utraty lub zdublowania archiwum.",
+        "⚠️ Reset zatrzymany. Ten dzień jedzony jest już w archiwum.\nSystem nie wyczyścił danych, żeby nie ryzykować utraty lub zdublowania archiwum.",
         "warn"
       );
       return;
