@@ -710,25 +710,36 @@ async function exportExcel() {
 
 async function resetDay() {
   const row = await loadOperationalStatus();
+  const mealDate = el("mealDateInput").value;
 
   if (!row || !operationalHasData(row)) {
     setSessionsStatus("Dane operacyjne są już puste. Nie ma czego resetować.", "warn");
     return;
   }
 
+  if (!mealDate) {
+    setSessionsStatus(
+      "❌ Nie można zamknąć dnia, bo nie ustawiono dnia jedzonego.
+Archiwum jest zapisywane wyłącznie po meal_date, więc najpierw ustaw dzień jedzony.",
+      "bad"
+    );
+    return;
+  }
+
   const sessionsCount = Number(row.packing_sessions_count || 0);
 
   const choice = await showChoiceModal({
-    title: "🧹 Zamknąć dzień i wyczyścić system?",
+    title: "🧹 Zarchiwizować dzień i wyczyścić system?",
     text: sessionsCount > 0
-      ? "Przed resetem system automatycznie pobierze raport Excel. Dopiero po poprawnym pobraniu raportu dane zostaną usunięte."
-      : "To usunie wszystkie dane operacyjne obecnego dnia. Raport nie zostanie pobrany, bo nie ma jeszcze żadnych sesji pakowania.",
+      ? "Przed resetem system pobierze raport Excel, zapisze archiwum pod dniem jedzonym, a dopiero potem wyczyści dane robocze."
+      : "System zapisze archiwum pod dniem jedzonym i wyczyści dane robocze. Raport Excel nie zostanie pobrany, bo nie ma jeszcze żadnych sesji pakowania.",
     details:
+      `Dzień jedzony / meal_date: <b>${escapeHtml(formatDatePL(mealDate))}</b><br><br>` +
       operationalDataDetailsHtml(row) +
-      `<br><br>Zostaną użytkownicy, role i struktura systemu.`,
+      `<br><br>Zostaną użytkownicy, role, struktura systemu oraz archiwum.`,
     buttons: [
       { label:"Anuluj", value:"cancel", className:"btnCancel" },
-      { label:"Pobierz raport i resetuj dzień", value:"continue", className:"btnReplace" }
+      { label:"Pobierz raport, archiwizuj i resetuj dzień", value:"continue", className:"btnReplace" }
     ]
   });
 
@@ -745,21 +756,44 @@ async function resetDay() {
     }
   }
 
-  const typed = window.prompt("Aby potwierdzić reset dnia, wpisz dokładnie: RESET");
+  const typed = window.prompt("Aby potwierdzić archiwizację i reset dnia, wpisz dokładnie: RESET");
 
   if (typed !== "RESET") {
     setSessionsStatus("⚠️ Reset anulowany. Nie wpisano poprawnie słowa RESET.", "warn");
     return;
   }
 
-  setSessionsStatus("⏳ Czyszczę dane operacyjne...", "info");
+  setSessionsStatus("⏳ Archiwizuję dzień jedzony i czyszczę dane operacyjne...", "info");
   el("resetDayButton").disabled = true;
 
   try {
     const { data, error } = await supabaseClient.rpc("admin_reset_operational_data");
 
-    if (error || data !== "OK") {
-      setSessionsStatus("❌ Nie udało się wykonać resetu dnia: " + (error?.message || data), "bad");
+    if (error) {
+      setSessionsStatus("❌ Nie udało się wykonać archiwizacji/resetu dnia: " + error.message, "bad");
+      return;
+    }
+
+    if (data === "NO_MEAL_DATE") {
+      setSessionsStatus(
+        "❌ Reset zatrzymany. Brakuje dnia jedzonego / meal_date.
+Ustaw dzień jedzony i spróbuj ponownie.",
+        "bad"
+      );
+      return;
+    }
+
+    if (data === "ALREADY_ARCHIVED") {
+      setSessionsStatus(
+        "⚠️ Reset zatrzymany. Ten dzień jedzony jest już w archiwum.
+System nie wyczyścił danych, żeby nie ryzykować utraty lub zdublowania archiwum.",
+        "warn"
+      );
+      return;
+    }
+
+    if (data !== "OK") {
+      setSessionsStatus("❌ Nie udało się wykonać archiwizacji/resetu dnia: " + data, "bad");
       return;
     }
 
@@ -770,7 +804,11 @@ async function resetDay() {
     el("mealDateInput").value = "";
     setMealDateStatus("Dzień jedzony: nieustawiony.", "warn");
 
-    setSessionsStatus("✅ Reset dnia wykonany. Możesz wgrać nowy plan CSV.", "ok");
+    setSessionsStatus(
+      `✅ Dzień jedzony ${formatDatePL(mealDate)} został zarchiwizowany, a dane robocze wyczyszczone.
+Możesz wgrać nowy plan CSV.`,
+      "ok"
+    );
 
     await refreshAdminData();
 

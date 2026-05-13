@@ -90,19 +90,19 @@
     <section class="adminSection">
       <div class="sectionHeader">
         <div>
-          <h2>📊 Raport i reset dnia</h2>
-          <div class="sectionHint">Najpierw pobierz raport, potem wyczyść dane operacyjne i wgraj nowy plan.</div>
+          <h2>📊 Raport i archiwizacja dnia</h2>
+          <div class="sectionHint">Najpierw pobierz raport, potem zarchiwizuj dzień jedzony i dopiero wtedy wyczyść dane operacyjne.</div>
         </div>
       </div>
 
       <div class="sectionBody">
         <div class="actionStack">
           <button id="exportReportButton" class="darkBtn">📤 Eksport Excel / Generuj raport</button>
-          <button id="resetDayButton" class="danger">🧹 Zamknij dzień i wyczyść system</button>
+          <button id="resetDayButton" class="danger">🧹 Zarchiwizuj dzień i wyczyść system</button>
 
           <div class="adminTip">
-            Reset usuwa plan, raport, braki, stanowiska, kolejki, skany, przydziały i aktywne logowania.
-            Zostają użytkownicy, role i struktura systemu.
+            System najpierw zapisuje archiwum pod aktualnym dniem jedzonym, a dopiero potem czyści plan, raport, braki, stanowiska, kolejki, skany, przydziały i aktywne logowania.
+            Zostają użytkownicy, role, struktura systemu oraz archiwum.
           </div>
 
           <p id="sessionsStatus" class="statusBox"></p>
