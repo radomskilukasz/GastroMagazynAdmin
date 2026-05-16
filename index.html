@@ -9,6 +9,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 
 <link rel="stylesheet" href="style.css">
 </head>
@@ -21,7 +23,7 @@
   </div>
 
   <h1>Panel administratora</h1>
-  <p class="loginSubtitle">Zaloguj się, aby zarządzać planem, raportami, użytkownikami i pakowaniem stanowiskowym</p>
+  <p class="loginSubtitle">Zaloguj się, aby zarządzać planem, raportami, użytkownikami i testami pakowania</p>
 
   <label>Login lub email</label>
   <input id="adminLogin" class="loginInput" placeholder="np. JanKowalski" autocomplete="username">
@@ -40,7 +42,7 @@
       <img src="logo.png" class="adminLogo" alt="logo">
       <div>
         <h1>Panel administratora</h1>
-        <p>Zarządzanie planem, raportami, użytkownikami i pakowaniem stanowiskowym.</p>
+        <p>Zarządzanie planem, raportami, użytkownikami i testami pakowania.</p>
       </div>
     </div>
     <div class="headerActions">
@@ -113,63 +115,23 @@
     <section class="adminSection fullWidth">
       <div class="sectionHeader">
         <div>
-          <h2>🧑‍🏭 Pakowanie stanowiskowe — podgląd hali</h2>
-          <div class="sectionHint">Kontrola aktywnych stanowisk, kolejek, błędów i logowań pracowników.</div>
+          <h2>🧪 Generator testowej torby PDF</h2>
+          <div class="sectionHint">Wpisz QR torby z aktualnego planu, a system wygeneruje jedną stronę PDF do kontroli skanowania.</div>
         </div>
       </div>
 
       <div class="sectionBody">
         <div class="actionStack">
-          <div class="statsGrid">
-            <div class="statCard">
-              <div class="statLabel">Aktywne stanowiska</div>
-              <div class="statValue" id="statLines">0</div>
-            </div>
-            <div class="statCard">
-              <div class="statLabel">Torby w obiegu</div>
-              <div class="statValue" id="statQueued">0</div>
-            </div>
-            <div class="statCard">
-              <div class="statLabel">Torby z błędem</div>
-              <div class="statValue bad" id="statBadStation">0</div>
-            </div>
-            <div class="statCard">
-              <div class="statLabel">Aktywne wpisy logowań</div>
-              <div class="statValue" id="statLogins">0</div>
-            </div>
+          <div class="roleBox">
+            <input id="testBagQrInput" placeholder="QR torby, np. GS0WYKE5F4" autocomplete="off">
+            <button id="testBagPdfButton" class="darkBtn">🧾 Generuj PDF testowy</button>
           </div>
 
-          <div class="buttonRow.three buttonRow">
-            <button class="lightBtn" id="refreshStationButton">🔄 Odśwież stanowiska</button>
-            <button class="warning" id="clearAllQueuesButton">🧹 Wyczyść wszystkie kolejki</button>
-            <button class="danger" id="closeAllLinesButton">🔒 Zamknij wszystkie stanowiska</button>
-          </div>
-
-          <p id="stationStatus" class="statusBox"></p>
-
-          <div class="subPanel">
-            <h3 class="subPanelTitle">Aktywne stanowiska i kolejki</h3>
-            <div id="stationLinesTable" class="tableWrap"></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="adminSection fullWidth">
-      <div class="sectionHeader">
-        <div>
-          <h2>🔐 Aktywne logowania</h2>
-          <div class="sectionHint">Po usunięciu blokad logowania ta sekcja jest głównie informacyjna. Możesz nadal awaryjnie usunąć wpis logowania.</div>
-        </div>
-      </div>
-
-      <div class="sectionBody">
-        <div class="actionStack">
           <div class="adminTip">
-            System nie blokuje już pracy jednego konta na kilku urządzeniach. Te wpisy służą do podglądu i awaryjnego czyszczenia.
+            PDF zawiera kod kreskowy torby z podpisem QR torby oraz wszystkie QR tacek z podpisami kodów. Wszystko jest dopasowane do jednej strony A4 z odstępami pod skaner.
           </div>
-          <div id="activeLoginsTable" class="tableWrap"></div>
-          <p id="loginsStatus" class="statusBox"></p>
+
+          <p id="testBagStatus" class="statusBox info">Status: wpisz QR torby i wygeneruj PDF testowy.</p>
         </div>
       </div>
     </section>
@@ -284,6 +246,20 @@
   </div>
 </div>
 
+<div class="hidden" aria-hidden="true">
+  <span id="statLines">0</span>
+  <span id="statQueued">0</span>
+  <span id="statBadStation">0</span>
+  <span id="statLogins">0</span>
+  <button id="refreshStationButton" type="button"></button>
+  <button id="clearAllQueuesButton" type="button"></button>
+  <button id="closeAllLinesButton" type="button"></button>
+  <p id="stationStatus" class="statusBox"></p>
+  <p id="loginsStatus" class="statusBox"></p>
+  <div id="stationLinesTable"></div>
+  <div id="activeLoginsTable"></div>
+</div>
+
 <div id="confirmModal" class="modalBg hidden">
   <div class="modal">
     <h2 id="confirmTitle">Potwierdź akcję</h2>
@@ -304,7 +280,9 @@
 </div>
 
 <script src="app.js"></script>
+<script src="admin-slim.js"></script>
 <script src="import-append.js"></script>
+<script src="test-bags.js"></script>
 
 </body>
 </html>
