@@ -151,21 +151,26 @@ async function generateManualQrPdf() {
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const pageW = 210;
 
-    // Rozmiary dopasowane do wydruku QR logowania:
-    // karta z czarną ramką + QR ok. 300px z wydruku przeliczony na ~80 mm.
-    const cardW = 126;
+    // Identyczne przeliczenie jak wydruk QR logowania:
+    // .card width 420px, border 3px, logo 80px, QR 300px przy 96 dpi.
+    const pxToMm = 25.4 / 96;
+    const cardW = 420 * pxToMm;
     const cardH = 258;
+    const borderW = 3 * pxToMm;
+    const logoSize = 80 * pxToMm;
+    const qrSize = 300 * pxToMm;
+
     const cardX = (pageW - cardW) / 2;
     const cardY = 18;
     const centerX = pageW / 2;
 
     doc.setDrawColor(17, 24, 39);
-    doc.setLineWidth(0.9);
+    doc.setLineWidth(borderW);
     doc.roundedRect(cardX, cardY, cardW, cardH, 7, 7);
 
     const logoDataUrl = await loadImageAsDataUrl("logo.png");
     if (logoDataUrl) {
-      doc.addImage(logoDataUrl, "PNG", centerX - 12, cardY + 10, 24, 24);
+      doc.addImage(logoDataUrl, "PNG", centerX - logoSize / 2, cardY + 10, logoSize, logoSize);
     }
 
     doc.setFont("helvetica", "bold");
@@ -176,7 +181,6 @@ async function generateManualQrPdf() {
     });
 
     const qrUrl = makeQrDataUrl(qrContent, 900);
-    const qrSize = 80;
     const qrX = centerX - qrSize / 2;
     const qrY = cardY + 84;
 
