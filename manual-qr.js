@@ -85,17 +85,33 @@ function loadImageAsDataUrl(src) {
   });
 }
 
-function addWrappedCenteredParagraph(doc, text, y, maxWidth, fontSize, bold = false) {
+function pdfSafeText(value) {
+  return String(value || "")
+    .replace(/ą/g, "a").replace(/ć/g, "c").replace(/ę/g, "e")
+    .replace(/ł/g, "l").replace(/ń/g, "n").replace(/ó/g, "o")
+    .replace(/ś/g, "s").replace(/ź/g, "z").replace(/ż/g, "z")
+    .replace(/Ą/g, "A").replace(/Ć/g, "C").replace(/Ę/g, "E")
+    .replace(/Ł/g, "L").replace(/Ń/g, "N").replace(/Ó/g, "O")
+    .replace(/Ś/g, "S").replace(/Ź/g, "Z").replace(/Ż/g, "Z")
+    .replace(/[–—]/g, "-")
+    .replace(/[„”]/g, '"')
+    .replace(/[’]/g, "'");
+}
+
+function addWrappedCenteredPdfText(doc, text, y, maxWidth, fontSize, bold = false, maxLines = 99) {
   doc.setFont("helvetica", bold ? "bold" : "normal");
   doc.setFontSize(fontSize);
 
   const pageW = 210;
-  const lines = doc.splitTextToSize(String(text || ""), maxWidth);
+  const safe = pdfSafeText(text);
+  const lines = doc.splitTextToSize(safe, maxWidth).slice(0, maxLines);
+  const lineHeight = fontSize * 0.36 + 1.4;
+
   lines.forEach((line, index) => {
-    doc.text(line, pageW / 2, y + index * (fontSize * 0.38 + 1.4), { align: "center" });
+    doc.text(line, pageW / 2, y + index * lineHeight, { align: "center" });
   });
 
-  return y + lines.length * (fontSize * 0.38 + 1.4);
+  return y + Math.max(1, lines.length) * lineHeight;
 }
 
 async function generateManualQrPdf() {
@@ -135,36 +151,49 @@ async function generateManualQrPdf() {
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const pageW = 210;
 
+    // Rozmiary dopasowane do wydruku QR logowania:
+    // karta z czarną ramką + QR ok. 300px z wydruku przeliczony na ~80 mm.
+    const cardW = 126;
+    const cardH = 258;
+    const cardX = (pageW - cardW) / 2;
+    const cardY = 18;
+    const centerX = pageW / 2;
+
+    doc.setDrawColor(17, 24, 39);
+    doc.setLineWidth(0.9);
+    doc.roundedRect(cardX, cardY, cardW, cardH, 7, 7);
+
     const logoDataUrl = await loadImageAsDataUrl("logo.png");
     if (logoDataUrl) {
-      doc.addImage(logoDataUrl, "PNG", 91, 10, 28, 28);
+      doc.addImage(logoDataUrl, "PNG", centerX - 12, cardY + 10, 24, 24);
     }
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(22);
-    const labelLines = doc.splitTextToSize(label, 174).slice(0, 3);
+    doc.setFontSize(20);
+    const labelLines = doc.splitTextToSize(pdfSafeText(label), cardW - 18).slice(0, 3);
     labelLines.forEach((line, index) => {
-      doc.text(line, pageW / 2, 49 + index * 9, { align: "center" });
+      doc.text(line, centerX, cardY + 49 + index * 8.5, { align: "center" });
     });
 
     const qrUrl = makeQrDataUrl(qrContent, 900);
-    const qrSize = 92;
-    const qrX = (pageW - qrSize) / 2;
-    const qrY = 78;
+    const qrSize = 80;
+    const qrX = centerX - qrSize / 2;
+    const qrY = cardY + 84;
 
     doc.addImage(qrUrl, "PNG", qrX, qrY, qrSize, qrSize);
 
-    const infoText = "Tymczasowe rozwiązanie kodów qr które nie istnieją na produktach lub tackach sprzedawanych na naszych stronach";
-    addWrappedCenteredParagraph(doc, infoText, 188, 176, 12, false);
+    const infoText = "Tymczasowe rozwiazanie kodow QR, ktore nie istnieja na produktach lub tackach sprzedawanych na naszych stronach";
+    addWrappedCenteredPdfText(doc, infoText, cardY + 185, cardW - 20, 11, false, 4);
 
     doc.setDrawColor(220, 220, 220);
-    doc.line(18, 236, 192, 236);
+    doc.setLineWidth(0.25);
+    doc.line(cardX + 14, cardY + 218, cardX + cardW - 14, cardY + 218);
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.text("Zawartość kodu QR:", pageW / 2, 248, { align: "center" });
+    doc.text("Zawartosc kodu QR:", centerX, cardY + 232, { align: "center" });
 
-    addWrappedCenteredParagraph(doc, qrContent, 258, 176, 13, true);
+    addWrappedCenteredPdfText(doc, qrContent, cardY + 244, cardW - 22, 13, true, 3);
 
     doc.save("kod_qr_" + safeFileName(label || qrContent) + ".pdf");
 
