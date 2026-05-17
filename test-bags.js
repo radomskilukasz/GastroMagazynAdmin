@@ -127,16 +127,80 @@ function computeQrLayout(count) {
   };
 }
 
-function addCenteredWrappedText(doc, text, centerX, y, maxWidth, fontSize, options = {}) {
-  doc.setFont("helvetica", options.bold ? "bold" : "normal");
-  doc.setFontSize(fontSize);
+function wrapCanvasText(ctx, text, maxWidthPx, maxLines) {
+  const words = String(text || "-").split(/\s+/).filter(Boolean);
+  const lines = [];
+  let current = "";
 
-  const lines = doc.splitTextToSize(String(text || "-"), maxWidth);
-  const limited = lines.slice(0, options.maxLines || 2);
+  words.forEach(word => {
+    const test = current ? current + " " + word : word;
 
-  limited.forEach((line, index) => {
-    doc.text(line, centerX, y + index * (fontSize * 0.36 + 1.2), { align: "center" });
+    if (ctx.measureText(test).width <= maxWidthPx || !current) {
+      current = test;
+      return;
+    }
+
+    lines.push(current);
+    current = word;
   });
+
+  if (current) lines.push(current);
+
+  const limited = lines.slice(0, maxLines || 2);
+
+  if (lines.length > limited.length && limited.length) {
+    let last = limited[limited.length - 1];
+    while (last.length > 1 && ctx.measureText(last + "…").width > maxWidthPx) {
+      last = last.slice(0, -1);
+    }
+    limited[limited.length - 1] = last + "…";
+  }
+
+  return limited.length ? limited : ["-"];
+}
+
+function makeTextImageDataUrl(text, maxWidthMm, fontSizePt, options = {}) {
+  /*
+    jsPDF w domyślnej czcionce Helvetica nie obsługuje poprawnie polskich znaków.
+    Dlatego teksty z planu, np. Śniadanie / Łosoś / Przekąska, renderujemy na canvasie
+    przez przeglądarkę i wstawiamy do PDF jako PNG. To usuwa problem znaków &&&&.
+  */
+  const scale = 5;
+  const pxPerMm = 8;
+  const canvasW = Math.max(80, Math.round(maxWidthMm * pxPerMm));
+  const fontPx = Math.max(12, Math.round(fontSizePt * scale));
+  const lineHeightPx = Math.round(fontPx * 1.22);
+  const paddingPx = Math.round(2 * scale);
+
+  const measuringCanvas = makeCanvas(canvasW, 10);
+  const measureCtx = measuringCanvas.getContext("2d");
+  measureCtx.font = `${options.bold ? "800" : "400"} ${fontPx}px Arial, Helvetica, sans-serif`;
+
+  const lines = wrapCanvasText(measureCtx, text, canvasW - paddingPx * 2, options.maxLines || 2);
+  const canvasH = Math.max(lineHeightPx + paddingPx * 2, lines.length * lineHeightPx + paddingPx * 2);
+  const canvas = makeCanvas(canvasW, canvasH);
+  const ctx = canvas.getContext("2d");
+
+  ctx.clearRect(0, 0, canvasW, canvasH);
+  ctx.font = `${options.bold ? "800" : "400"} ${fontPx}px Arial, Helvetica, sans-serif`;
+  ctx.fillStyle = options.color || "#111827";
+  ctx.textBaseline = "top";
+  ctx.textAlign = "center";
+
+  lines.forEach((line, index) => {
+    ctx.fillText(line, canvasW / 2, paddingPx + index * lineHeightPx);
+  });
+
+  return {
+    dataUrl: canvas.toDataURL("image/png"),
+    widthMm: maxWidthMm,
+    heightMm: canvasH / pxPerMm
+  };
+}
+
+function addCenteredWrappedText(doc, text, centerX, y, maxWidth, fontSize, options = {}) {
+  const img = makeTextImageDataUrl(text, maxWidth, fontSize, options);
+  doc.addImage(img.dataUrl, "PNG", centerX - img.widthMm / 2, y, img.widthMm, img.heightMm);
 }
 
 async function getBagPlanRowsForPdf(bagQr) {
@@ -214,7 +278,6 @@ async function generateTestBagPdf() {
 
     const layout = computeQrLayout(rows.length);
     const startY = 66;
-    const availableW = pageW - margin * 2;
 
     rows.forEach((row, index) => {
       const col = index % layout.cols;
