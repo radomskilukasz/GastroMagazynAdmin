@@ -115,6 +115,31 @@
     <section class="adminSection fullWidth">
       <div class="sectionHeader">
         <div>
+          <h2>🗑️ Czyszczenie archiwum</h2>
+          <div class="sectionHint">Usuń archiwalne dane z wybranego zakresu dni jedzonych.</div>
+        </div>
+      </div>
+
+      <div class="sectionBody">
+        <div class="actionStack">
+          <div class="roleBox">
+            <input type="date" id="archiveClearDateFrom">
+            <input type="date" id="archiveClearDateTo">
+            <button id="clearArchiveButton" class="danger">🗑️ Wyczyść archiwum z zakresu</button>
+          </div>
+
+          <div class="adminTip">
+            Usuwanie działa po <b>dniu jedzonym</b>. Przykład: od 2026-05-01 do 2026-05-03 usunie archiwum za 1, 2 i 3 maja. Tej operacji nie da się cofnąć.
+          </div>
+
+          <p id="archiveClearStatus" class="statusBox info">Status: wybierz zakres dat i kliknij czyszczenie archiwum.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="adminSection fullWidth">
+      <div class="sectionHeader">
+        <div>
           <h2>🧪 Generator testowej torby PDF</h2>
           <div class="sectionHint">Wpisz QR torby z aktualnego planu, a system wygeneruje jedną stronę PDF do kontroli skanowania.</div>
         </div>
@@ -165,7 +190,7 @@
       <div class="sectionHeader">
         <div>
           <h2>➕ Użytkownicy</h2>
-          <div class="sectionHint">Twórz nowe konta i usuwaj użytkowników bez wchodzenia do Supabase.</div>
+          <div class="sectionHint">Twórz nowe konta z nazwą wyświetlaną i usuwaj użytkowników bez wchodzenia do Supabase.</div>
         </div>
       </div>
 
@@ -175,6 +200,7 @@
             <h3 class="subPanelTitle">Dodaj nowego użytkownika</h3>
             <div class="userCreateBox">
               <input id="newUserLogin" placeholder="nowy login lub email">
+              <input id="newUserDisplayName" placeholder="ładna nazwa, np. Daria Malczewska">
               <input id="newUserPassword" type="password" placeholder="hasło dla użytkownika">
               <select id="newUserRole">
                 <option value="worker">worker</option>
@@ -196,7 +222,7 @@
           </div>
 
           <div class="adminTip">
-            Dodawanie i usuwanie użytkowników działa przez Edge Functions po stronie Supabase. Klucz service role nie znajduje się w tym pliku HTML.
+            Nazwa wyświetlana zapisuje się w profilu użytkownika. Dzięki temu raport i kontrola mogą pokazywać np. „Daria Malczewska”, a nie sam login techniczny.
           </div>
 
           <p id="userStatus" class="statusBox"></p>
@@ -284,6 +310,7 @@
 <script src="import-append.js"></script>
 <script src="test-bags.js"></script>
 <script src="manual-qr.js"></script>
+<script src="admin-extra.js"></script>
 
 </body>
 </html>
