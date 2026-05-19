@@ -89,6 +89,14 @@ function manualQrSvg(token) {
   return qr.createSvgTag(8, 2);
 }
 
+function getAbsoluteAssetUrl(fileName) {
+  try {
+    return new URL(fileName, window.location.href).href;
+  } catch(e) {
+    return fileName;
+  }
+}
+
 async function generateManualQrPdf() {
   const labelInput = document.getElementById("manualQrLabelInput");
   const codeInput = document.getElementById("manualQrCodeInput");
@@ -127,6 +135,7 @@ async function generateManualQrPdf() {
 
   const safeLabel = manualQrSafeHtml(label);
   const safeContent = manualQrSafeHtml(qrContent);
+  const logoUrl = manualQrSafeHtml(getAbsoluteAssetUrl("logo.png"));
 
   const printWindow = window.open("", "_blank", "width=720,height=900");
 
@@ -167,6 +176,7 @@ async function generateManualQrPdf() {
           width: 80px;
           height: auto;
           margin-bottom: 10px;
+          display: inline-block;
         }
 
         h1 {
@@ -225,7 +235,7 @@ async function generateManualQrPdf() {
     </head>
     <body>
       <div class="card">
-        <img src="logo.png" class="logo" onerror="this.style.display='none'">
+        <img src="${logoUrl}" class="logo" alt="logo" onerror="this.style.visibility='hidden'">
         <h1>${safeLabel}</h1>
 
         <div class="qrBox">
@@ -243,7 +253,7 @@ async function generateManualQrPdf() {
       <script>
         setTimeout(function() {
           window.print();
-        }, 300);
+        }, 500);
       <\/script>
     </body>
     </html>
