@@ -2,6 +2,13 @@
   Dodatkowe funkcje admina:
   - tworzenie konta z nazwą wyświetlaną,
   - czyszczenie archiwum po zakresie meal_date.
+
+  Ważne:
+  app.js podpina do createUserButton starą funkcję createUser() przez addEventListener.
+  Samo ustawienie onclick nie usuwa tego listenera, więc wcześniej odpalały się dwie funkcje:
+  1) stara createUser() bez display_name,
+  2) nowa createUserWithDisplayName().
+  Dlatego przy instalacji nadpisania wymieniamy przycisk na klona i dopiero do niego podpinamy nową funkcję.
 */
 
 function adminExtraGetEmail(loginValue) {
@@ -63,7 +70,15 @@ async function adminExtraCallFunction(functionName, payload) {
   return json;
 }
 
-async function createUserWithDisplayName() {
+async function createUserWithDisplayName(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (typeof event.stopImmediatePropagation === "function") {
+      event.stopImmediatePropagation();
+    }
+  }
+
   const loginEl = document.getElementById("newUserLogin");
   const displayEl = document.getElementById("newUserDisplayName");
   const passwordEl = document.getElementById("newUserPassword");
@@ -102,27 +117,55 @@ async function createUserWithDisplayName() {
   adminExtraSetUserStatus("⏳ Dodaję użytkownika i zapisuję nazwę wyświetlaną...", "info");
 
   try {
-    await adminExtraCallFunction("admin-create-user", {
-      email,
+    const result = await adminExtraCallFunction("admin-create-user", {
       login: loginRaw,
+      email,
       password,
       role,
       display_name: displayName,
-      full_name: displayName
+      full_name: displayName,
+      displayName,
+      fullName: displayName,
+      user_metadata: {
+        display_name: displayName,
+        full_name: displayName,
+        name: displayName
+      }
     });
 
-    const { data, error } = await supabaseClient.rpc("admin_set_user_display_name_by_email", {
-      target_user_email: email,
-      target_display_name: displayName
-    });
+    const functionOk = result?.ok === true || result?.status === "OK" || result?.message;
 
-    if (error || data !== "OK") {
+    if (!functionOk && result?.error) {
+      throw new Error(result.error);
+    }
+
+    let displayNameSaved = false;
+    let displayNameWarning = "";
+
+    try {
+      const { data, error } = await supabaseClient.rpc("admin_set_user_display_name_by_email", {
+        target_user_email: email,
+        target_display_name: displayName
+      });
+
+      if (error || data !== "OK") {
+        displayNameWarning = error?.message || data || "funkcja nie zwróciła OK";
+      } else {
+        displayNameSaved = true;
+      }
+    } catch (displayErr) {
+      displayNameWarning = displayErr.message;
+    }
+
+    if (displayNameSaved) {
+      adminExtraSetUserStatus("✅ Dodano użytkownika: " + displayName + " (" + email + ") z rolą " + role, "ok");
+    } else {
       adminExtraSetUserStatus(
-        "⚠️ Konto zostało utworzone, ale nie udało się zapisać nazwy wyświetlanej: " + (error?.message || data),
+        "✅ Konto zostało utworzone: " + email + " z rolą " + role + "\n" +
+        "⚠️ Dodatkowy zapis nazwy przez RPC nie potwierdził OK: " + displayNameWarning + "\n" +
+        "Jeżeli Edge Function admin-create-user obsługuje display_name, nazwa mogła mimo tego zapisać się w metadanych.",
         "warn"
       );
-    } else {
-      adminExtraSetUserStatus("✅ Dodano użytkownika: " + displayName + " (" + email + ") z rolą " + role, "ok");
     }
 
     if (loginEl) loginEl.value = "";
@@ -213,22 +256,26 @@ async function clearArchiveBetweenDates() {
   }
 }
 
-function installAdminExtraOverrides() {
-  const createBtn = document.getElementById("createUserButton");
-  if (createBtn) {
-    createBtn.onclick = event => {
-      event.preventDefault();
-      createUserWithDisplayName();
-    };
-  }
+function replaceButtonWithoutOldListeners(buttonId, handler) {
+  const oldButton = document.getElementById(buttonId);
+  if (!oldButton || !oldButton.parentNode) return null;
 
-  const clearArchiveBtn = document.getElementById("clearArchiveButton");
-  if (clearArchiveBtn) {
-    clearArchiveBtn.onclick = event => {
-      event.preventDefault();
-      clearArchiveBetweenDates();
-    };
-  }
+  const newButton = oldButton.cloneNode(true);
+  newButton.removeAttribute("onclick");
+  newButton.addEventListener("click", handler);
+  oldButton.parentNode.replaceChild(newButton, oldButton);
+  return newButton;
+}
+
+function installAdminExtraOverrides() {
+  replaceButtonWithoutOldListeners("createUserButton", event => createUserWithDisplayName(event));
+
+  replaceButtonWithoutOldListeners("clearArchiveButton", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+    clearArchiveBetweenDates();
+  });
 
   const loginEl = document.getElementById("newUserLogin");
   const displayEl = document.getElementById("newUserDisplayName");
@@ -243,7 +290,7 @@ function installAdminExtraOverrides() {
   });
 
   passwordEl?.addEventListener("keydown", e => {
-    if (e.key === "Enter") createUserWithDisplayName();
+    if (e.key === "Enter") createUserWithDisplayName(e);
   });
 }
 
