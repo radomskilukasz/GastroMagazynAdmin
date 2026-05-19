@@ -132,3 +132,165 @@ window.renderQrCode = async function(code, email) {
     setQrStatus('Nie udało się narysować QR: ' + err.message, 'bad');
   }
 };
+
+function printCurrentQrDisplayNameFixed(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation?.();
+  }
+
+  if (!currentQrToken || !currentQrEmail) {
+    setQrStatus('❌ Najpierw wygeneruj kod QR.', 'bad');
+    return;
+  }
+
+  let qrSvg = currentQrSvg;
+
+  try {
+    if (!qrSvg) qrSvg = makeQrSvg(currentQrToken, 8, 2);
+  } catch (err) {
+    setQrStatus('❌ Nie udało się przygotować QR do druku: ' + err.message, 'bad');
+    return;
+  }
+
+  const safeUser = escapeHtml(qrNiceByEmail(currentQrEmail));
+  const safeLogin = escapeHtml(qrFixLogin(currentQrEmail));
+  const safeToken = escapeHtml(currentQrToken);
+  const logoUrl = new URL('logo.png', window.location.href).href;
+
+  const printWindow = window.open('', '_blank', 'width=720,height=900');
+
+  if (!printWindow) {
+    setQrStatus('❌ Przeglądarka zablokowała okno drukowania. Zezwól na wyskakujące okna.', 'bad');
+    return;
+  }
+
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html lang="pl">
+    <head>
+      <meta charset="UTF-8">
+      <title>QR logowania</title>
+      <style>
+        body {
+          font-family: Arial, sans-serif;
+          text-align: center;
+          padding: 30px;
+          color: #111827;
+        }
+
+        .card {
+          border: 3px solid #111827;
+          border-radius: 24px;
+          padding: 28px;
+          display: inline-block;
+          width: 420px;
+          max-width: 100%;
+        }
+
+        img.logo {
+          width: 80px;
+          height: auto;
+          margin-bottom: 10px;
+        }
+
+        h1 {
+          margin: 0 0 10px;
+          font-size: 28px;
+        }
+
+        .login {
+          font-size: 32px;
+          font-weight: 900;
+          margin: 12px 0 4px;
+          word-break: break-word;
+        }
+
+        .technicalLogin {
+          font-size: 14px;
+          color: #6b7280;
+          font-weight: 700;
+          margin: 0 0 18px;
+          word-break: break-word;
+        }
+
+        .qrBox {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          margin: 18px 0;
+        }
+
+        .qrBox svg {
+          width: 300px !important;
+          height: 300px !important;
+          display: block;
+        }
+
+        .hint {
+          margin-top: 18px;
+          font-size: 15px;
+          color: #374151;
+          line-height: 1.45;
+        }
+
+        .token {
+          margin-top: 14px;
+          font-size: 11px;
+          color: #6b7280;
+          word-break: break-all;
+        }
+
+        @media print {
+          body { padding: 0; }
+          .card { margin: 0; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <img src="${logoUrl}" class="logo" onerror="this.style.display='none'">
+        <h1>Kod QR logowania</h1>
+        <div class="login">${safeUser}</div>
+        <div class="technicalLogin">${safeLogin}</div>
+
+        <div class="qrBox">
+          ${qrSvg}
+        </div>
+
+        <div class="hint">
+          Zeskanuj kod QR na ekranie logowania programu pakowania lub kontroli.
+          Login i hasło nadal działają awaryjnie.
+        </div>
+
+        <div class="token">${safeToken}</div>
+      </div>
+
+      <script>
+        setTimeout(function() {
+          window.print();
+        }, 300);
+      <\/script>
+    </body>
+    </html>
+  `);
+
+  printWindow.document.close();
+}
+
+window.printCurrentQr = printCurrentQrDisplayNameFixed;
+
+function installQrPrintDisplayNameFix() {
+  const oldButton = document.getElementById('qrPrintButton');
+  if (!oldButton || !oldButton.parentNode) return;
+
+  const newButton = oldButton.cloneNode(true);
+  newButton.removeAttribute('onclick');
+  newButton.addEventListener('click', printCurrentQrDisplayNameFixed, true);
+  oldButton.parentNode.replaceChild(newButton, oldButton);
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  setTimeout(installQrPrintDisplayNameFix, 0);
+});
