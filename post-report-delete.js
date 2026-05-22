@@ -1,6 +1,14 @@
 let postReportDeleteBags = [];
 let postReportDeletePreviewRow = null;
 
+(function loadAdminQrLoginScriptFromPostReportDelete(){
+  if (document.querySelector('script[src*="admin-qr-login.js"]')) return;
+  const script = document.createElement('script');
+  script.src = 'admin-qr-login.js?v=1';
+  script.async = false;
+  document.body.appendChild(script);
+})();
+
 function setPostReportDeleteStatus(text, type = "info") {
   setBox("postReportDeleteStatus", text, type);
 }
