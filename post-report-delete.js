@@ -1,12 +1,19 @@
 let postReportDeleteBags = [];
 let postReportDeletePreviewRow = null;
 
-(function loadAdminQrLoginScriptFromPostReportDelete(){
-  if (document.querySelector('script[src*="admin-qr-login.js"]')) return;
-  const script = document.createElement('script');
-  script.src = 'admin-qr-login.js?v=1';
-  script.async = false;
-  document.body.appendChild(script);
+(function loadAdminExtraScriptsFromPostReportDelete(){
+  if (!document.querySelector('script[src*="admin-qr-login.js"]')) {
+    const script = document.createElement('script');
+    script.src = 'admin-qr-login.js?v=1';
+    script.async = false;
+    document.body.appendChild(script);
+  }
+  if (!document.querySelector('script[src*="customer-manifest-admin.js"]')) {
+    const script2 = document.createElement('script');
+    script2.src = 'customer-manifest-admin.js?v=1';
+    script2.async = false;
+    document.body.appendChild(script2);
+  }
 })();
 
 function setPostReportDeleteStatus(text, type = "info") {
