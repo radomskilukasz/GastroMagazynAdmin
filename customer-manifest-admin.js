@@ -1,5 +1,7 @@
-/* Import dziennej zbiorczej klientów do customer_manifest. */
+/* Import dziennej zbiorczej klientów do customer_manifest — wersja paczkowana, odporna na duże CSV. */
 (function(){
+  const CHUNK_SIZE = 400;
+
   function el(id){ return document.getElementById(id); }
 
   function setStatus(text, type){
@@ -61,13 +63,27 @@
     return { total, ok, withBag, dates };
   }
 
+  function toIsoDate(value){
+    const v = String(value || '').trim();
+    if (!v) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+    const m = v.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if (m) return `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
+    return v;
+  }
+
+  function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
+
   async function importCustomerManifest(){
     const input = el('customerManifestFile');
     const replace = el('customerManifestReplace')?.checked !== false;
     const file = input?.files?.[0];
+    const button = el('customerManifestImportButton');
     if (!file) { setStatus('❌ Wybierz CSV z arkusza WYNIK - klienci.', 'bad'); return; }
 
+    if (button) { button.disabled = true; button.innerText = 'Importuję...'; }
     setStatus('⏳ Czytam plik manifestu klientów...', 'info');
+
     try {
       const text = await file.text();
       const rows = parseCsv(text);
@@ -77,22 +93,53 @@
       if (!p.withBag) { setStatus('❌ Nie widzę kolumny bag_qr albo wszystkie wartości są puste.', 'bad'); return; }
       if (p.dates.length !== 1) { setStatus('❌ Plik powinien zawierać dokładnie jeden dzień jedzony. Wykryto: ' + p.dates.join(', '), 'bad'); return; }
 
-      setStatus(`⏳ Importuję ${p.total} wierszy. Dzień: ${p.dates[0]}. Dopasowane QR: ${p.withBag}.`, 'info');
+      const mealDate = toIsoDate(p.dates[0]);
 
-      const { data, error } = await supabaseClient.rpc('customer_manifest_import', {
-        rows,
-        replace_existing: replace
-      });
+      if (replace) {
+        setStatus(`⏳ Czyszczę poprzednią zbiorczą dla dnia ${mealDate}...`, 'info');
+        const clearResult = await supabaseClient.rpc('customer_manifest_clear_day', { p_meal_date: mealDate });
+        if (clearResult.error) {
+          setStatus('❌ Nie udało się wyczyścić poprzedniej zbiorczej: ' + clearResult.error.message, 'bad');
+          return;
+        }
+      }
 
-      if (error) { setStatus('❌ Import manifestu nieudany: ' + error.message, 'bad'); return; }
+      let imported = 0;
+      let skipped = 0;
+      const totalChunks = Math.ceil(rows.length / CHUNK_SIZE);
 
-      const row = Array.isArray(data) ? data[0] : data;
-      if (!row || row.status !== 'OK') { setStatus('❌ Import zwrócił nieoczekiwany wynik.', 'bad'); return; }
+      for (let start = 0, chunkNo = 1; start < rows.length; start += CHUNK_SIZE, chunkNo++) {
+        const chunk = rows.slice(start, start + CHUNK_SIZE);
+        setStatus(`⏳ Importuję paczkę ${chunkNo}/${totalChunks}. Wiersze ${start + 1}-${Math.min(start + CHUNK_SIZE, rows.length)} z ${rows.length}...`, 'info');
 
-      setStatus(`✅ Zaimportowano manifest klientów. Dzień: ${row.meal_date}. Wiersze: ${row.imported_count}. Pominięte: ${row.skipped_count}.`, 'ok');
+        const { data, error } = await supabaseClient.rpc('customer_manifest_import', {
+          rows: chunk,
+          replace_existing: false
+        });
+
+        if (error) {
+          setStatus(`❌ Import manifestu przerwany na paczce ${chunkNo}/${totalChunks}: ${error.message}`, 'bad');
+          return;
+        }
+
+        const row = Array.isArray(data) ? data[0] : data;
+        if (!row || row.status !== 'OK') {
+          setStatus(`❌ Import paczki ${chunkNo}/${totalChunks} zwrócił nieoczekiwany wynik.`, 'bad');
+          return;
+        }
+
+        imported += Number(row.imported_count || 0);
+        skipped += Number(row.skipped_count || 0);
+
+        await sleep(30);
+      }
+
+      setStatus(`✅ Zaimportowano manifest klientów. Dzień: ${mealDate}. Wiersze: ${imported}. Pominięte: ${skipped}. Paczki: ${totalChunks}.`, 'ok');
       if (typeof refreshAdminData === 'function') refreshAdminData();
     } catch(e) {
-      setStatus('❌ Błąd importu manifestu: ' + e.message, 'bad');
+      setStatus('❌ Błąd importu manifestu: ' + (e.message || e), 'bad');
+    } finally {
+      if (button) { button.disabled = false; button.innerText = '⬆️ Wgraj zbiorczą klientów'; }
     }
   }
 
@@ -121,7 +168,7 @@
           </label>
           <button id="customerManifestImportButton" class="darkBtn">⬆️ Wgraj zbiorczą klientów</button>
           <div class="adminTip">
-            System zapisze dzienny snapshot klient → torba. Obecne pakowanie tacek nie jest zmieniane. Po archiwizacji dane trafią do archiwum manifestu.
+            Duże pliki są importowane w paczkach po ${CHUNK_SIZE} wierszy, więc import może chwilę potrwać. Nie zamykaj strony do komunikatu końcowego.
           </div>
           <p id="customerManifestStatus" class="statusBox info">Status: wybierz CSV z arkusza WYNIK - klienci.</p>
         </div>
