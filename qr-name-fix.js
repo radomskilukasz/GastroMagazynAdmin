@@ -291,6 +291,16 @@ function installQrPrintDisplayNameFix() {
   oldButton.parentNode.replaceChild(newButton, oldButton);
 }
 
+function loadBadReasonReportPatch() {
+  if (document.getElementById('badReasonReportPatchScript')) return;
+
+  const script = document.createElement('script');
+  script.id = 'badReasonReportPatchScript';
+  script.src = 'bad-reason-report-patch.js?v=1';
+  document.body.appendChild(script);
+}
+
 window.addEventListener('DOMContentLoaded', () => {
   setTimeout(installQrPrintDisplayNameFix, 0);
+  setTimeout(loadBadReasonReportPatch, 0);
 });
