@@ -115,27 +115,28 @@
     <section class="adminSection fullWidth">
       <div class="sectionHeader">
         <div>
-          <h2>🧾 Zmiany poraportowe — usuń torby z aktualnego dnia</h2>
-          <div class="sectionHint">Wgraj taki sam CSV jak przy imporcie, ale jako listę toreb do usunięcia z bieżącego dnia roboczego.</div>
+          <h2>🧾 Zmiany poraportowe — odwołaj torby z aktualnego dnia</h2>
+          <div class="sectionHint">Wgraj taki sam CSV jak przy imporcie, ale jako listę toreb do oznaczenia statusem ODWOŁANA.</div>
         </div>
       </div>
 
       <div class="sectionBody">
         <div class="actionStack">
           <div class="formGroup">
-            <label>CSV z torbami do usunięcia</label>
+            <label>CSV z torbami do odwołania</label>
             <input type="file" id="postReportDeleteFile" class="fileInput" accept=".csv,text/csv">
           </div>
 
           <div class="roleBox">
-            <button id="previewPostReportDeleteButton" class="darkBtn">🔎 Sprawdź przed usunięciem</button>
-            <input id="postReportDeleteConfirm" placeholder="Wpisz USUŃ, aby odblokować usuwanie">
-            <button id="executePostReportDeleteButton" class="danger">🗑️ Usuń torby z aktualnego dnia</button>
+            <button id="previewPostReportDeleteButton" class="darkBtn">🔎 Sprawdź przed odwołaniem</button>
+            <input id="postReportDeleteConfirm" placeholder="Wpisz ODWOŁAJ, aby odblokować odwołanie">
+            <button id="executePostReportDeleteButton" class="danger">⛔ Odwołaj torby z aktualnego dnia</button>
           </div>
 
           <div class="adminTip">
-            Funkcja usuwa wskazane <b>bag_qr</b> z aktualnych danych roboczych: planu, sesji, braków, skanów i stanowisk.
-            Działa niezależnie od statusu torby. <b>Archiwum nie jest ruszane.</b> Operacja jest zabezpieczona aktualnym dniem jedzonym <b>meal_date</b>.
+            Funkcja oznacza wskazane <b>bag_qr</b> statusem <b>ODWOŁANA</b> dla aktualnego dnia roboczego.
+            Torby zostają w śladzie systemowym, ale nie liczą się do normalnego pakowania, poprawnych, niepoprawnych, braków ani tempa.
+            Po zeskanowaniu takiej torby pracownik zobaczy komunikat, aby oddać ją do biura kierowników w celu utylizacji.
           </div>
 
           <p id="postReportDeleteStatus" class="statusBox info">Status: wybierz CSV i najpierw wykonaj podgląd.</p>
