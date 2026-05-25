@@ -20,6 +20,10 @@ function setPostReportDeleteStatus(text, type = "info") {
   setBox("postReportDeleteStatus", text, type);
 }
 
+function getPostReportMealDate() {
+  return String(el("postReportMealDateInput")?.value || "").trim();
+}
+
 function normalizeBagForDelete(value) {
   return String(value || "")
     .trim()
@@ -143,17 +147,23 @@ function renderPostReportPreview(row, bags) {
 async function previewPostReportDelete() {
   const input = el("postReportDeleteFile");
   const file = input?.files?.[0];
+  const selectedMealDate = getPostReportMealDate();
 
   postReportDeleteBags = [];
   postReportDeletePreviewRow = null;
   el("postReportDeletePreview").innerHTML = "";
+
+  if (!selectedMealDate) {
+    setPostReportDeleteStatus("❌ Wybierz dzień jedzony zmian poraportowych.", "bad");
+    return;
+  }
 
   if (!file) {
     setPostReportDeleteStatus("❌ Wybierz plik CSV ze zmianami poraportowymi do odwołania.", "bad");
     return;
   }
 
-  setPostReportDeleteStatus("⏳ Czytam CSV i sprawdzam aktualny plan...", "info");
+  setPostReportDeleteStatus("⏳ Czytam CSV i sprawdzam plan dla wybranego dnia...", "info");
 
   try {
     const text = await file.text();
@@ -164,7 +174,8 @@ async function previewPostReportDelete() {
       return;
     }
 
-    const { data, error } = await supabaseClient.rpc("admin_preview_cancel_bags", {
+    const { data, error } = await supabaseClient.rpc("admin_preview_cancel_bags_for_date", {
+      target_meal_date: selectedMealDate,
       target_bag_qrs: bags
     });
 
@@ -186,7 +197,7 @@ async function previewPostReportDelete() {
     renderPostReportPreview(row, bags);
 
     setPostReportDeleteStatus(
-      `✅ Podgląd gotowy. Torby w pliku: ${bags.length}. Do odwołania znalezione w aktualnym planie: ${Number(row.found_in_plan || 0)}.`,
+      `✅ Podgląd gotowy. Dzień: ${formatDatePL(row.meal_date)}. Torby w pliku: ${bags.length}. Do odwołania znalezione w aktualnym planie: ${Number(row.found_in_plan || 0)}.`,
       Number(row.found_in_plan || 0) > 0 ? "warn" : "ok"
     );
 
@@ -197,9 +208,20 @@ async function previewPostReportDelete() {
 
 async function executePostReportDelete() {
   const confirmText = String(el("postReportDeleteConfirm")?.value || "").trim();
+  const selectedMealDate = getPostReportMealDate();
+
+  if (!selectedMealDate) {
+    setPostReportDeleteStatus("❌ Wybierz dzień jedzony zmian poraportowych.", "bad");
+    return;
+  }
 
   if (!postReportDeleteBags.length || !postReportDeletePreviewRow) {
     setPostReportDeleteStatus("❌ Najpierw wykonaj podgląd pliku CSV.", "bad");
+    return;
+  }
+
+  if (String(postReportDeletePreviewRow.meal_date || "") !== selectedMealDate) {
+    setPostReportDeleteStatus("❌ Data w polu różni się od daty z podglądu. Wykonaj podgląd ponownie.", "bad");
     return;
   }
 
@@ -231,7 +253,8 @@ async function executePostReportDelete() {
   el("executePostReportDeleteButton").disabled = true;
 
   try {
-    const { data, error } = await supabaseClient.rpc("admin_cancel_bags", {
+    const { data, error } = await supabaseClient.rpc("admin_cancel_bags_for_date", {
+      target_meal_date: selectedMealDate,
       target_bag_qrs: postReportDeleteBags,
       cancel_reason: "Odwołanie po zmianach poraportowych"
     });
@@ -275,6 +298,13 @@ async function executePostReportDelete() {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
+  const postDateInput = el("postReportMealDateInput");
+  const importDateInput = el("mealDateInput");
+
+  if (postDateInput && importDateInput && importDateInput.value && !postDateInput.value) {
+    postDateInput.value = importDateInput.value;
+  }
+
   el("previewPostReportDeleteButton")?.addEventListener("click", previewPostReportDelete);
   el("executePostReportDeleteButton")?.addEventListener("click", executePostReportDelete);
 });
