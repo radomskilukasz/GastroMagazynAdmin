@@ -130,14 +130,9 @@ function renderPostReportPreview(row, bags) {
           <tr><th>Dzień jedzony</th><td><b>${escapeHtml(formatDatePL(row.meal_date))}</b></td></tr>
           <tr><th>Unikalne torby w pliku</th><td><b>${Number(row.input_bags || bags.length || 0)}</b></td></tr>
           <tr><th>Znalezione w aktualnym planie</th><td><b>${Number(row.found_in_plan || 0)}</b></td></tr>
+          <tr><th>Już odwołane</th><td><b>${Number(row.already_cancelled || 0)}</b></td></tr>
           <tr><th>Wiersze packing_plan</th><td>${Number(row.packing_plan_rows || 0)}</td></tr>
-          <tr><th>Sesje pakowania</th><td>${Number(row.packing_sessions_rows || 0)}</td></tr>
-          <tr><th>Pozycje sesji</th><td>${Number(row.packing_session_items_rows || 0)}</td></tr>
-          <tr><th>Stare tray_scans</th><td>${Number(row.tray_scans_rows || 0)}</td></tr>
-          <tr><th>Torby stanowiskowe</th><td>${Number(row.station_line_bags_rows || 0)}</td></tr>
-          <tr><th>Stany pozycji stanowiskowych</th><td>${Number(row.station_bag_item_states_rows || 0)}</td></tr>
-          <tr><th>Skany stanowiskowe</th><td>${Number(row.station_line_scans_rows || 0)}</td></tr>
-          <tr><th>Historia zdarzeń</th><td>${Number(row.packing_item_events_rows || 0)}</td></tr>
+          <tr><th>Istniejące sesje pakowania</th><td>${Number(row.packing_sessions_rows || 0)}</td></tr>
           <tr><th>Torby z pliku niewykryte w aktualnym planie</th><td>${missing.length ? escapeHtml(missing.join(" | ")) : "-"}</td></tr>
         </tbody>
       </table>
@@ -154,7 +149,7 @@ async function previewPostReportDelete() {
   el("postReportDeletePreview").innerHTML = "";
 
   if (!file) {
-    setPostReportDeleteStatus("❌ Wybierz plik CSV ze zmianami poraportowymi do usunięcia.", "bad");
+    setPostReportDeleteStatus("❌ Wybierz plik CSV ze zmianami poraportowymi do odwołania.", "bad");
     return;
   }
 
@@ -169,7 +164,7 @@ async function previewPostReportDelete() {
       return;
     }
 
-    const { data, error } = await supabaseClient.rpc("admin_preview_post_report_delete_bags", {
+    const { data, error } = await supabaseClient.rpc("admin_preview_cancel_bags", {
       target_bag_qrs: bags
     });
 
@@ -191,7 +186,7 @@ async function previewPostReportDelete() {
     renderPostReportPreview(row, bags);
 
     setPostReportDeleteStatus(
-      `✅ Podgląd gotowy. Torby w pliku: ${bags.length}. Znalezione w aktualnym planie: ${Number(row.found_in_plan || 0)}.`,
+      `✅ Podgląd gotowy. Torby w pliku: ${bags.length}. Do odwołania znalezione w aktualnym planie: ${Number(row.found_in_plan || 0)}.`,
       Number(row.found_in_plan || 0) > 0 ? "warn" : "ok"
     );
 
@@ -208,58 +203,59 @@ async function executePostReportDelete() {
     return;
   }
 
-  if (!["USUN", "USUŃ"].includes(confirmText.toUpperCase())) {
-    setPostReportDeleteStatus("❌ Aby usunąć torby, wpisz w pole potwierdzenia: USUŃ", "bad");
+  if (confirmText.toUpperCase() !== "ODWOŁAJ" && confirmText.toUpperCase() !== "ODWOLAJ") {
+    setPostReportDeleteStatus("❌ Aby odwołać torby, wpisz w pole potwierdzenia: ODWOŁAJ", "bad");
     return;
   }
 
   const row = postReportDeletePreviewRow;
 
   const choice = await showChoiceModal({
-    title: "🧾 Usunąć zmiany poraportowe?",
-    text: "To usunie wybrane torby z aktualnego dnia roboczego, niezależnie od tego czy są w brakach, spakowane, w kolejce lub w trakcie. Archiwum nie zostanie ruszone.",
+    title: "🧾 Odwołać zmiany poraportowe?",
+    text: "To oznaczy wybrane torby jako ODWOŁANE. Torby zostaną w śladzie systemowym, ale nie będą liczone do normalnego pakowania.",
     details:
       `Dzień jedzony: <b>${escapeHtml(formatDatePL(row.meal_date))}</b><br>` +
       `Torby z pliku: <b>${Number(row.input_bags || postReportDeleteBags.length)}</b><br>` +
       `Znalezione w aktualnym planie: <b>${Number(row.found_in_plan || 0)}</b><br>` +
-      `Wiersze packing_plan do usunięcia: <b>${Number(row.packing_plan_rows || 0)}</b><br><br>` +
-      `Archiwum: <b>nie będzie ruszane</b>.`,
+      `Już odwołane: <b>${Number(row.already_cancelled || 0)}</b><br><br>` +
+      `Po skanie pracownik zobaczy komunikat o oddaniu torby do biura kierowników.`,
     buttons: [
       { label: "Anuluj", value: "cancel", className: "btnCancel" },
-      { label: "Usuń torby z aktualnego dnia", value: "delete", className: "btnReplace" }
+      { label: "Odwołaj torby", value: "cancel_bags", className: "btnReplace" }
     ]
   });
 
-  if (choice !== "delete") return;
+  if (choice !== "cancel_bags") return;
 
-  setPostReportDeleteStatus("⏳ Usuwam torby z aktualnego dnia roboczego...", "info");
+  setPostReportDeleteStatus("⏳ Oznaczam torby jako ODWOŁANE...", "info");
   el("executePostReportDeleteButton").disabled = true;
 
   try {
-    const { data, error } = await supabaseClient.rpc("admin_delete_post_report_bags", {
+    const { data, error } = await supabaseClient.rpc("admin_cancel_bags", {
       target_bag_qrs: postReportDeleteBags,
-      confirmation_text: confirmText
+      cancel_reason: "Odwołanie po zmianach poraportowych"
     });
 
     if (error) {
-      setPostReportDeleteStatus("❌ Nie udało się usunąć zmian poraportowych: " + error.message, "bad");
+      setPostReportDeleteStatus("❌ Nie udało się odwołać zmian poraportowych: " + error.message, "bad");
       return;
     }
 
     const result = data && data.length ? data[0] : null;
 
     if (!result || result.status !== "OK") {
-      setPostReportDeleteStatus("❌ Funkcja usuwania zwróciła nieoczekiwany wynik.", "bad");
+      setPostReportDeleteStatus("❌ Funkcja odwoływania zwróciła nieoczekiwany wynik.", "bad");
       return;
     }
 
+    const missing = result.missing_bags || [];
+
     setPostReportDeleteStatus(
-      `✅ Usunięto zmiany poraportowe dla dnia ${formatDatePL(result.meal_date)}.\n` +
+      `✅ Odwołano torby dla dnia ${formatDatePL(result.meal_date)}.\n` +
       `Torby w pliku: ${Number(result.input_bags || 0)}\n` +
-      `Usunięto z planu: ${Number(result.deleted_packing_plan_rows || 0)} wierszy\n` +
-      `Usunięto sesje: ${Number(result.deleted_packing_sessions_rows || 0)}\n` +
-      `Usunięto pozycje sesji: ${Number(result.deleted_packing_session_items_rows || 0)}\n` +
-      `Archiwum nie zostało ruszone.`,
+      `Odwołane / zaktualizowane: ${Number(result.cancelled_bags || 0)}\n` +
+      `Już odwołane przed operacją: ${Number(result.already_cancelled || 0)}\n` +
+      `Niewykryte w aktualnym planie: ${missing.length ? missing.join(" | ") : "-"}`,
       "ok"
     );
 
@@ -272,7 +268,7 @@ async function executePostReportDelete() {
     await refreshAdminData();
 
   } catch (err) {
-    setPostReportDeleteStatus("❌ Błąd usuwania zmian poraportowych: " + err.message, "bad");
+    setPostReportDeleteStatus("❌ Błąd odwoływania zmian poraportowych: " + err.message, "bad");
   } finally {
     el("executePostReportDeleteButton").disabled = false;
   }
