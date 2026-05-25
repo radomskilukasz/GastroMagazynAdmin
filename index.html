@@ -115,13 +115,18 @@
     <section class="adminSection fullWidth">
       <div class="sectionHeader">
         <div>
-          <h2>🧾 Zmiany poraportowe — odwołaj torby z aktualnego dnia</h2>
-          <div class="sectionHint">Wgraj taki sam CSV jak przy imporcie, ale jako listę toreb do oznaczenia statusem ODWOŁANA.</div>
+          <h2>🧾 Zmiany poraportowe — odwołaj torby z wybranego dnia</h2>
+          <div class="sectionHint">Wybierz dzień jedzony i wgraj CSV jako listę toreb do oznaczenia statusem ODWOŁANA.</div>
         </div>
       </div>
 
       <div class="sectionBody">
         <div class="actionStack">
+          <div class="formGroup">
+            <label>Dzień jedzony zmian poraportowych</label>
+            <input type="date" id="postReportMealDateInput">
+          </div>
+
           <div class="formGroup">
             <label>CSV z torbami do odwołania</label>
             <input type="file" id="postReportDeleteFile" class="fileInput" accept=".csv,text/csv">
@@ -130,16 +135,17 @@
           <div class="roleBox">
             <button id="previewPostReportDeleteButton" class="darkBtn">🔎 Sprawdź przed odwołaniem</button>
             <input id="postReportDeleteConfirm" placeholder="Wpisz ODWOŁAJ, aby odblokować odwołanie">
-            <button id="executePostReportDeleteButton" class="danger">⛔ Odwołaj torby z aktualnego dnia</button>
+            <button id="executePostReportDeleteButton" class="danger">⛔ Odwołaj torby z wybranego dnia</button>
           </div>
 
           <div class="adminTip">
-            Funkcja oznacza wskazane <b>bag_qr</b> statusem <b>ODWOŁANA</b> dla aktualnego dnia roboczego.
+            Funkcja oznacza wskazane <b>bag_qr</b> statusem <b>ODWOŁANA</b> dla wybranego dnia jedzonego.
+            CSV nie musi mieć kolumny meal_date — dzień wybierasz powyżej.
             Torby zostają w śladzie systemowym, ale nie liczą się do normalnego pakowania, poprawnych, niepoprawnych, braków ani tempa.
             Po zeskanowaniu takiej torby pracownik zobaczy komunikat, aby oddać ją do biura kierowników w celu utylizacji.
           </div>
 
-          <p id="postReportDeleteStatus" class="statusBox info">Status: wybierz CSV i najpierw wykonaj podgląd.</p>
+          <p id="postReportDeleteStatus" class="statusBox info">Status: wybierz dzień jedzony, CSV i najpierw wykonaj podgląd.</p>
           <div id="postReportDeletePreview"></div>
         </div>
       </div>
