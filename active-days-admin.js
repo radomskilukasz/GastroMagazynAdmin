@@ -216,7 +216,57 @@ async function applySelectedActiveMealDate() {
   activeDaysSetStatus("✅ Ustawiono dzień roboczy: " + activeDaysFormatDate(value), "ok");
   return true;
 }
+async function getReportDataForActiveDay() {
+  const mealDate =
+    selectedActiveMealDate ||
+    String(activeDaysEl("activeMealDateSelect")?.value || "").trim() ||
+    String(activeDaysEl("mealDateInput")?.value || "").trim();
 
+  if (!mealDate) {
+    if (typeof window.__baseGetReportData === "function") {
+      return await window.__baseGetReportData();
+    }
+
+    throw new Error("Brak wybranego dnia raportu.");
+  }
+
+  const { data: rpcRows, error: reportError } = await supabaseClient.rpc("get_packing_report_rows_for_date", {
+    p_meal_date: mealDate
+  });
+
+  if (reportError) {
+    throw new Error(reportError.message);
+  }
+
+  const reportRows = rpcRows || [];
+
+  const { data: brakiData, error: brakiError } = await supabaseClient.rpc("get_braki_report_for_date", {
+    p_meal_date: mealDate
+  });
+
+  const brakiRows = brakiError
+    ? reportRows.filter(x => normalizeStatus(x.status) === "BRAKI")
+    : (brakiData || []);
+
+  const sessions = typeof mergeSessionsWithBraki === "function"
+    ? mergeSessionsWithBraki(reportRows, brakiRows)
+    : reportRows;
+
+  const { data: bagCount, error: bagCountError } = await supabaseClient.rpc("count_unique_bags_for_date", {
+    p_meal_date: mealDate
+  });
+
+  if (bagCountError) {
+    throw new Error(bagCountError.message);
+  }
+
+  return {
+    sessions,
+    brakiRows,
+    totalBagsInPlan: bagCount || 0,
+    mealDate
+  };
+}
 async function resetSelectedActiveDay(event) {
   if (event) {
     event.preventDefault();
@@ -360,7 +410,10 @@ async function resetSelectedActiveDay(event) {
 
 function installActiveDaysAdmin() {
   ensureActiveDaysPanel();
-
+if (typeof window.getReportData === "function" && !window.__baseGetReportData) {
+  window.__baseGetReportData = window.getReportData;
+  window.getReportData = getReportDataForActiveDay;
+}
   const oldReset = activeDaysEl("resetDayButton");
 
   if (oldReset && oldReset.parentNode) {
