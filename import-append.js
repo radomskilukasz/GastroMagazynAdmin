@@ -196,11 +196,12 @@ function isUnifiedCsv(parsed) {
     h.has("dish_name");
 }
 
-function buildPackingPlanRowsFromCsv(parsed, batchId) {
+function buildPackingPlanRowsFromCsv(parsed, batchId, selectedMealDate) {
   const unified = isUnifiedCsv(parsed);
 
   return (parsed.rows || []).map(row => ({
     import_batch_id: batchId,
+    meal_date: selectedMealDate || null,
     order_id: unified ? rowValue(row, ["client_id"]) : null,
     bag_qr: rowValue(row, ["bag_qr", "qr_torby", "numer_etykiety"], unified ? null : 0),
     tray_qr: rowValue(row, ["tray_qr", "qr_tacki", "kod_tacki"], unified ? null : 1),
@@ -414,7 +415,7 @@ async function upload() {
       ? crypto.randomUUID()
       : String(Date.now()) + "-" + Math.random().toString(16).slice(2);
 
-    const planRows = buildPackingPlanRowsFromCsv(parsed, batchId);
+    const planRows = buildPackingPlanRowsFromCsv(parsed, batchId, selectedMealDate);
     const manifestRows = buildCustomerManifestRowsFromCsv(parsed, selectedMealDate);
     const unifiedCsv = isUnifiedCsv(parsed);
 
