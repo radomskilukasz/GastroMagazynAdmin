@@ -4,21 +4,31 @@
   - wybór aktywnego dnia przy archiwizacji,
   - ukrycie starego osobnego importu klientów / manifestu,
   - czytelniejsze komunikaty,
-  - doładowanie logiki importu wielu aktywnych dni.
+  - doładowanie logiki importu wielu aktywnych dni,
+  - doładowanie raportu po wybranym aktywnym dniu.
 */
 
 (function () {
-  function loadMultiDayImportOverride() {
-    if (document.querySelector('script[data-import-multiday="true"]')) return;
+  function loadScriptOnce(src, flagName) {
+    if (document.querySelector(`script[data-${flagName}="true"]`)) return;
 
     const script = document.createElement("script");
-    script.src = "import-multiday.js?v=20260531";
+    script.src = src;
     script.defer = false;
-    script.dataset.importMultiday = "true";
+    script.dataset[flagName] = "true";
     document.head.appendChild(script);
   }
 
+  function loadMultiDayImportOverride() {
+    loadScriptOnce("import-multiday.js?v=20260531b", "importMultiday");
+  }
+
+  function loadActiveDayReportOverride() {
+    loadScriptOnce("report-active-day.js?v=20260531", "reportActiveDay");
+  }
+
   loadMultiDayImportOverride();
+  loadActiveDayReportOverride();
 
   function q(id) {
     return document.getElementById(id);
@@ -214,16 +224,17 @@
       "Wybierz aktywny dzień, pobierz raport i zamknij tylko tę datę. Archiwum zostaje osobno."
     );
 
+    setText(q("exportReportButton"), "📤 Eksport Excel dla wybranego dnia");
     setText(q("resetDayButton"), "🧹 Zarchiwizuj wybrany dzień");
 
     const tip = section.querySelector(".adminTip");
 
     if (tip) {
       setHtml(tip, `
-        Archiwizacja działa po <b>wybranym aktywnym dniu</b>.
-        Zamykana jest tylko wskazana data, a inne aktywne dni zostają bez zmian.
+        Raport i archiwizacja działają po <b>wybranym aktywnym dniu</b>.
+        Raport pokaże tylko wskazaną datę, a nie wszystkie aktywne dni razem.
         <br><br>
-        Jeżeli dzień był już w archiwum, system tylko posprząta ewentualne pozostałe dane robocze tej daty.
+        Zamykana jest tylko wskazana data, a inne aktywne dni zostają bez zmian.
       `);
     }
   }
@@ -314,6 +325,7 @@
 
     setTimeout(() => {
       loadMultiDayImportOverride();
+      loadActiveDayReportOverride();
       cleanImportCard();
       cleanArchiveCard();
       hideObsoleteClientImport();
