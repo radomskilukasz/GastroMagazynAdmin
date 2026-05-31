@@ -3,10 +3,23 @@
   - jeden CSV: plan + dane klienta,
   - wybór aktywnego dnia przy archiwizacji,
   - ukrycie starego osobnego importu klientów / manifestu,
-  - czytelniejsze komunikaty.
+  - czytelniejsze komunikaty,
+  - doładowanie logiki importu wielu aktywnych dni.
 */
 
 (function () {
+  function loadMultiDayImportOverride() {
+    if (document.querySelector('script[data-import-multiday="true"]')) return;
+
+    const script = document.createElement("script");
+    script.src = "import-multiday.js?v=20260531";
+    script.defer = false;
+    script.dataset.importMultiday = "true";
+    document.head.appendChild(script);
+  }
+
+  loadMultiDayImportOverride();
+
   function q(id) {
     return document.getElementById(id);
   }
@@ -166,7 +179,7 @@
     setText(section.querySelector("h2"), "📥 Jeden import CSV: plan + dane klienta");
     setText(
       section.querySelector(".sectionHint"),
-      "Wgraj jeden plik CSV. System sam rozdzieli plan pakowania i dane klienta."
+      "Wgraj jeden plik CSV. System sam rozdzieli plan pakowania i dane klienta. Możesz mieć kilka aktywnych dni naraz."
     );
 
     setText(q("uploadButton"), "⬆️ Wgraj jeden CSV");
@@ -185,7 +198,7 @@
         <code>client_id;delivery_date;zone;default_diet;variant;calories;bag_qr;tray_qr;meal;code;size;dish_name</code>
         <br><br>
         Jeden plik zasila jednocześnie <b>plan pakowania</b> oraz <b>dane klienta</b>.
-        Stary osobny import klientów / manifestu nie jest już używany.
+        Możesz wgrywać kolejne dni bez archiwizacji poprzedniego — każdy dzień zostanie osobnym aktywnym dniem roboczym.
       `);
     }
   }
@@ -300,6 +313,7 @@
     }
 
     setTimeout(() => {
+      loadMultiDayImportOverride();
       cleanImportCard();
       cleanArchiveCard();
       hideObsoleteClientImport();
