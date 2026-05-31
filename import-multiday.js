@@ -1,6 +1,6 @@
 /*
   Import wielu aktywnych dni.
-  Ten plik ładuje się po import-append.js i nadpisuje tylko upload().
+  Ten plik ładuje się po import-append.js i nadpisuje upload().
 
   Nowa zasada:
   - jeden CSV może zawierać tylko jeden dzień,
@@ -258,3 +258,28 @@ async function upload() {
 }
 
 window.upload = upload;
+window.uploadMultiDay = upload;
+
+function installMultiDayUploadButton() {
+  const oldButton = document.getElementById("uploadButton");
+  if (!oldButton || oldButton.dataset.multidayBound === "true") return;
+
+  const newButton = oldButton.cloneNode(true);
+  newButton.dataset.multidayBound = "true";
+  newButton.textContent = "⬆️ Wgraj jeden CSV";
+  newButton.addEventListener("click", upload);
+  oldButton.parentNode.replaceChild(newButton, oldButton);
+}
+
+function installMultiDayUploadButtonRepeated() {
+  installMultiDayUploadButton();
+  setTimeout(installMultiDayUploadButton, 0);
+  setTimeout(installMultiDayUploadButton, 300);
+  setTimeout(installMultiDayUploadButton, 800);
+}
+
+if (document.readyState === "loading") {
+  window.addEventListener("DOMContentLoaded", installMultiDayUploadButtonRepeated);
+} else {
+  installMultiDayUploadButtonRepeated();
+}
