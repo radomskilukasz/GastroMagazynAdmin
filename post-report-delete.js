@@ -1,18 +1,12 @@
 let postReportDeleteBags = [];
 let postReportDeletePreviewRow = null;
 
-(function loadAdminExtraScriptsFromPostReportDelete(){
+(function loadAdminQrLoginOnlyFromPostReportDelete(){
   if (!document.querySelector('script[src*="admin-qr-login.js"]')) {
     const script = document.createElement('script');
     script.src = 'admin-qr-login.js?v=1';
     script.async = false;
     document.body.appendChild(script);
-  }
-  if (!document.querySelector('script[src*="customer-manifest-admin.js"]')) {
-    const script2 = document.createElement('script');
-    script2.src = 'customer-manifest-admin.js?v=1';
-    script2.async = false;
-    document.body.appendChild(script2);
   }
 })();
 
@@ -180,131 +174,112 @@ async function previewPostReportDelete() {
     });
 
     if (error) {
-      setPostReportDeleteStatus("❌ Nie udało się wykonać podglądu: " + error.message, "bad");
+      setPostReportDeleteStatus("❌ Nie udało się sprawdzić zmian poraportowych: " + error.message, "bad");
       return;
     }
 
-    const row = data && data.length ? data[0] : null;
-
-    if (!row) {
-      setPostReportDeleteStatus("❌ Funkcja podglądu nie zwróciła danych.", "bad");
-      return;
-    }
-
+    const row = Array.isArray(data) ? data[0] : data;
     postReportDeleteBags = bags;
     postReportDeletePreviewRow = row;
 
     renderPostReportPreview(row, bags);
 
     setPostReportDeleteStatus(
-      `✅ Podgląd gotowy. Dzień: ${formatDatePL(row.meal_date)}. Torby w pliku: ${bags.length}. Do odwołania znalezione w aktualnym planie: ${Number(row.found_in_plan || 0)}.`,
-      Number(row.found_in_plan || 0) > 0 ? "warn" : "ok"
+      `✅ Podgląd gotowy. Plik: ${bags.length} toreb. Znaleziono w planie: ${Number(row?.found_in_plan || 0)}. Już odwołane: ${Number(row?.already_cancelled || 0)}.`,
+      "ok"
     );
-
   } catch (err) {
     setPostReportDeleteStatus("❌ Błąd podglądu zmian poraportowych: " + err.message, "bad");
   }
 }
 
 async function executePostReportDelete() {
-  const confirmText = String(el("postReportDeleteConfirm")?.value || "").trim();
   const selectedMealDate = getPostReportMealDate();
+  const confirmText = String(el("postReportDeleteConfirm")?.value || "").trim();
 
   if (!selectedMealDate) {
     setPostReportDeleteStatus("❌ Wybierz dzień jedzony zmian poraportowych.", "bad");
     return;
   }
 
-  if (!postReportDeleteBags.length || !postReportDeletePreviewRow) {
-    setPostReportDeleteStatus("❌ Najpierw wykonaj podgląd pliku CSV.", "bad");
+  if (!postReportDeleteBags.length) {
+    setPostReportDeleteStatus("❌ Najpierw wykonaj podgląd CSV.", "bad");
     return;
   }
 
-  if (String(postReportDeletePreviewRow.meal_date || "") !== selectedMealDate) {
-    setPostReportDeleteStatus("❌ Data w polu różni się od daty z podglądu. Wykonaj podgląd ponownie.", "bad");
+  if (confirmText !== "ODWOŁAJ") {
+    setPostReportDeleteStatus("❌ Aby wykonać odwołanie, wpisz dokładnie: ODWOŁAJ", "bad");
     return;
   }
-
-  if (confirmText.toUpperCase() !== "ODWOŁAJ" && confirmText.toUpperCase() !== "ODWOLAJ") {
-    setPostReportDeleteStatus("❌ Aby odwołać torby, wpisz w pole potwierdzenia: ODWOŁAJ", "bad");
-    return;
-  }
-
-  const row = postReportDeletePreviewRow;
 
   const choice = await showChoiceModal({
-    title: "🧾 Odwołać zmiany poraportowe?",
-    text: "To oznaczy wybrane torby jako ODWOŁANE. Torby zostaną w śladzie systemowym, ale nie będą liczone do normalnego pakowania.",
+    title: "⛔ Odwołać torby?",
+    text: "Ta operacja oznaczy wskazane torby statusem ODWOŁANA dla wybranego dnia jedzonego.",
     details:
-      `Dzień jedzony: <b>${escapeHtml(formatDatePL(row.meal_date))}</b><br>` +
-      `Torby z pliku: <b>${Number(row.input_bags || postReportDeleteBags.length)}</b><br>` +
-      `Znalezione w aktualnym planie: <b>${Number(row.found_in_plan || 0)}</b><br>` +
-      `Już odwołane: <b>${Number(row.already_cancelled || 0)}</b><br><br>` +
-      `Po skanie pracownik zobaczy komunikat o oddaniu torby do biura kierowników.`,
+      `Dzień jedzony: <b>${escapeHtml(formatDatePL(selectedMealDate))}</b><br>` +
+      `Torby w pliku: <b>${postReportDeleteBags.length}</b><br>` +
+      `Znalezione w planie: <b>${Number(postReportDeletePreviewRow?.found_in_plan || 0)}</b><br>` +
+      `Już odwołane: <b>${Number(postReportDeletePreviewRow?.already_cancelled || 0)}</b>`,
     buttons: [
-      { label: "Anuluj", value: "cancel", className: "btnCancel" },
-      { label: "Odwołaj torby", value: "cancel_bags", className: "btnReplace" }
+      { label:"Anuluj", value:"cancel", className:"btnCancel" },
+      { label:"Odwołaj torby", value:"delete", className:"btnReplace" }
     ]
   });
 
-  if (choice !== "cancel_bags") return;
+  if (choice !== "delete") return;
 
+  const button = el("executePostReportDeleteButton");
+  if (button) button.disabled = true;
   setPostReportDeleteStatus("⏳ Oznaczam torby jako ODWOŁANE...", "info");
-  el("executePostReportDeleteButton").disabled = true;
 
   try {
     const { data, error } = await supabaseClient.rpc("admin_cancel_bags_for_date", {
       target_meal_date: selectedMealDate,
       target_bag_qrs: postReportDeleteBags,
-      cancel_reason: "Odwołanie po zmianach poraportowych"
+      reason_text: "Zmiany poraportowe / odwołanie torby z CSV"
     });
 
     if (error) {
-      setPostReportDeleteStatus("❌ Nie udało się odwołać zmian poraportowych: " + error.message, "bad");
+      setPostReportDeleteStatus("❌ Nie udało się odwołać toreb: " + error.message, "bad");
       return;
     }
 
-    const result = data && data.length ? data[0] : null;
-
-    if (!result || result.status !== "OK") {
-      setPostReportDeleteStatus("❌ Funkcja odwoływania zwróciła nieoczekiwany wynik.", "bad");
-      return;
-    }
-
-    const missing = result.missing_bags || [];
+    const row = Array.isArray(data) ? data[0] : data;
 
     setPostReportDeleteStatus(
-      `✅ Odwołano torby dla dnia ${formatDatePL(result.meal_date)}.\n` +
-      `Torby w pliku: ${Number(result.input_bags || 0)}\n` +
-      `Odwołane / zaktualizowane: ${Number(result.cancelled_bags || 0)}\n` +
-      `Już odwołane przed operacją: ${Number(result.already_cancelled || 0)}\n` +
-      `Niewykryte w aktualnym planie: ${missing.length ? missing.join(" | ") : "-"}`,
+      `✅ Odwołanie zakończone. Nowo odwołane: ${Number(row?.newly_cancelled || 0)}. Już wcześniej odwołane: ${Number(row?.already_cancelled || 0)}. Brakujące w planie: ${Number(row?.missing_count || 0)}.`,
       "ok"
     );
 
+    el("postReportDeleteConfirm").value = "";
     postReportDeleteBags = [];
     postReportDeletePreviewRow = null;
-    el("postReportDeleteConfirm").value = "";
-    el("postReportDeleteFile").value = "";
-    el("postReportDeletePreview").innerHTML = "";
 
-    await refreshAdminData();
-
+    if (typeof refreshAdminData === "function") await refreshAdminData();
   } catch (err) {
-    setPostReportDeleteStatus("❌ Błąd odwoływania zmian poraportowych: " + err.message, "bad");
+    setPostReportDeleteStatus("❌ Błąd odwoływania toreb: " + err.message, "bad");
   } finally {
-    el("executePostReportDeleteButton").disabled = false;
+    if (button) button.disabled = false;
   }
 }
 
-window.addEventListener("DOMContentLoaded", () => {
-  const postDateInput = el("postReportMealDateInput");
-  const importDateInput = el("mealDateInput");
+function bindPostReportDeleteButtons() {
+  const previewButton = el("previewPostReportDeleteButton");
+  const executeButton = el("executePostReportDeleteButton");
 
-  if (postDateInput && importDateInput && importDateInput.value && !postDateInput.value) {
-    postDateInput.value = importDateInput.value;
+  if (previewButton && previewButton.dataset.boundPostReportDelete !== "true") {
+    previewButton.dataset.boundPostReportDelete = "true";
+    previewButton.addEventListener("click", previewPostReportDelete);
   }
 
-  el("previewPostReportDeleteButton")?.addEventListener("click", previewPostReportDelete);
-  el("executePostReportDeleteButton")?.addEventListener("click", executePostReportDelete);
-});
+  if (executeButton && executeButton.dataset.boundPostReportDelete !== "true") {
+    executeButton.dataset.boundPostReportDelete = "true";
+    executeButton.addEventListener("click", executePostReportDelete);
+  }
+}
+
+if (document.readyState === "loading") {
+  window.addEventListener("DOMContentLoaded", bindPostReportDeleteButtons);
+} else {
+  bindPostReportDeleteButtons();
+}
