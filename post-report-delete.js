@@ -1,6 +1,15 @@
 let postReportDeleteBags = [];
 let postReportDeletePreviewRow = null;
 
+(function loadAdminDarkControlRoomTheme(){
+  if (!document.querySelector('link[href*="dark-control-room.css"]')) {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'dark-control-room.css?v=1';
+    document.head.appendChild(link);
+  }
+})();
+
 (function loadAdminQrLoginOnlyFromPostReportDelete(){
   if (!document.querySelector('script[src*="admin-qr-login.js"]')) {
     const script = document.createElement('script');
