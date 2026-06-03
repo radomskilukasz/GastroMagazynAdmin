@@ -3,7 +3,7 @@
   const USER_KEY = "gastro_admin_user_tab";
 
   const tabs = [
-    ["pulpit", "▦", "Pulpit", "Najważniejsze akcje i stan systemu"],
+    ["pulpit", "▦", "Pulpit", "Centrum dowodzenia: szybki import, aktywne dni i zamknięcie dnia"],
     ["import", "⇩", "Import CSV", "Wgrywanie nowego planu i danych klienta"],
     ["dni", "▣", "Dni robocze", "Aktywne daty i zamykanie dnia"],
     ["raporty", "▤", "Raporty", "Eksporty, archiwum i czyszczenie"],
@@ -21,7 +21,6 @@
 
   function q(sel, root){ return (root || document).querySelector(sel); }
   function qa(sel, root){ return Array.from((root || document).querySelectorAll(sel)); }
-
   function titleOf(section){ return String(section.querySelector("h2")?.textContent || "").toLowerCase(); }
 
   function classify(section){
@@ -33,7 +32,7 @@
     if (t.includes("raport") || t.includes("archiwizacja dnia")) { out.add("pulpit"); out.add("dni"); out.add("raporty"); }
     if (t.includes("zmiany poraportowe") || t.includes("odwołaj torby")) { out.add("torby"); out.add("raporty"); }
     if (t.includes("czyszczenie archiwum")) { out.add("raporty"); out.add("narzedzia"); }
-    if (t.includes("generator testowej") || t.includes("pdf")) { out.add("pulpit"); out.add("torby"); out.add("narzedzia"); }
+    if (t.includes("generator testowej") || t.includes("pdf")) { out.add("torby"); out.add("narzedzia"); }
     if (t.includes("użytkownicy") || t.includes("role") || t.includes("qr")) { out.add("uzytkownicy"); }
 
     if (!out.size) out.add("narzedzia");
@@ -61,7 +60,7 @@
       <nav class="adminSideNav">
         ${tabs.map(x => `<button type="button" class="adminTabButton" data-tab="${x[0]}" title="${x[3]}"><span>${x[1]}</span><b>${x[2]}</b></button>`).join("")}
       </nav>
-      <div class="adminSidebarFooter"><div>v2.6.0</div><div class="onlineDot"><span></span> System online</div></div>
+      <div class="adminSidebarFooter"><div>v2.7.0</div><div class="onlineDot"><span></span> System online</div></div>
     `;
 
     const main = document.createElement("main");
@@ -74,16 +73,16 @@
 
     const toolbar = document.createElement("section");
     toolbar.className = "adminTabToolbar";
-    toolbar.innerHTML = `<div><div class="toolbarEyebrow">Widok</div><h2 id="adminTabTitle">Pulpit</h2><p id="adminTabSubtitle">Najważniejsze akcje i stan systemu</p></div>`;
+    toolbar.innerHTML = `<div><div class="toolbarEyebrow">Widok</div><h2 id="adminTabTitle">Pulpit</h2><p id="adminTabSubtitle">Centrum dowodzenia: szybki import, aktywne dni i zamknięcie dnia</p></div>`;
     main.appendChild(toolbar);
 
     const kpi = document.createElement("section");
     kpi.className = "adminKpiGrid";
     kpi.innerHTML = `
-      <div class="adminKpiCard"><div class="kpiIcon">▣</div><div><div class="kpiLabel">AKTYWNE DNI</div><div class="kpiValue" id="kpiActiveDays">-</div><div class="kpiSub">dni robocze</div></div></div>
-      <div class="adminKpiCard"><div class="kpiIcon">▢</div><div><div class="kpiLabel">TORBY W PLANIE</div><div class="kpiValue" id="kpiBags">-</div><div class="kpiSub">sztuk</div></div></div>
-      <div class="adminKpiCard"><div class="kpiIcon">▤</div><div><div class="kpiLabel">TACKI W PLANIE</div><div class="kpiValue" id="kpiTrays">-</div><div class="kpiSub">sztuk</div></div></div>
-      <div class="adminKpiCard red"><div class="kpiIcon">×</div><div><div class="kpiLabel">ODWOŁANE</div><div class="kpiValue" id="kpiCancelled">-</div><div class="kpiSub">torby</div></div></div>
+      <div class="adminKpiCard"><div class="kpiIcon">▣</div><div><div class="kpiLabel">AKTYWNE DNI</div><div class="kpiValue" id="kpiActiveDays">0</div><div class="kpiSub">dni robocze</div></div></div>
+      <div class="adminKpiCard"><div class="kpiIcon">▢</div><div><div class="kpiLabel">TORBY W PLANIE</div><div class="kpiValue" id="kpiBags">0</div><div class="kpiSub">sztuk</div></div></div>
+      <div class="adminKpiCard"><div class="kpiIcon">▤</div><div><div class="kpiLabel">TACKI W PLANIE</div><div class="kpiValue" id="kpiTrays">0</div><div class="kpiSub">sztuk</div></div></div>
+      <div class="adminKpiCard red"><div class="kpiIcon">×</div><div><div class="kpiLabel">ODWOŁANE</div><div class="kpiValue" id="kpiCancelled">0</div><div class="kpiSub">torby</div></div></div>
       <div class="adminKpiCard green"><div class="kpiIcon">✓</div><div><div class="kpiLabel">STATUS</div><div class="kpiValue">Gotowy</div><div class="kpiSub">panel działa</div></div></div>
     `;
     main.appendChild(kpi);
@@ -93,14 +92,19 @@
   }
 
   function classifyAll(){ qa(".adminGrid > .adminSection").forEach(classify); }
-
   function tabMeta(id){ return tabs.find(x => x[0] === id) || tabs[0]; }
+
+  function compactPulpit(activeTab){
+    const isPulpit = activeTab === "pulpit";
+    document.body.classList.toggle("compactPulpit", isPulpit);
+  }
 
   function setTab(id){
     const exists = tabs.some(x => x[0] === id);
     const tab = exists ? id : "pulpit";
     localStorage.setItem(KEY, tab);
     document.body.dataset.adminTab = tab;
+    compactPulpit(tab);
 
     const meta = tabMeta(tab);
     if (q("#adminTabTitle")) q("#adminTabTitle").textContent = meta[2];
@@ -113,27 +117,33 @@
       const list = String(section.dataset.adminTabs || "").split(/\s+/);
       section.classList.toggle("adminTabHidden", !list.includes(tab));
     });
-
-    setTimeout(() => window.scrollTo({ top:0, behavior:"smooth" }), 20);
   }
 
   function asNumber(v){ return Number(v || 0); }
   function fmt(v){ return asNumber(v).toLocaleString("pl-PL"); }
 
+  function setKpi(active, bags, trays, cancelled){
+    if (q("#kpiActiveDays")) q("#kpiActiveDays").textContent = fmt(active);
+    if (q("#kpiBags")) q("#kpiBags").textContent = fmt(bags);
+    if (q("#kpiTrays")) q("#kpiTrays").textContent = fmt(trays);
+    if (q("#kpiCancelled")) q("#kpiCancelled").textContent = fmt(cancelled);
+  }
+
   async function refreshKpi(){
-    if (!window.supabaseClient) return;
     try {
-      const res = await window.supabaseClient.rpc("active_packing_days");
+      if (typeof supabaseClient === "undefined") return;
+      const res = await supabaseClient.rpc("active_packing_days");
+      if (res.error) throw res.error;
+
       const rows = (res.data || []).filter(r => r && r.meal_date);
-      const active = rows.filter(r => asNumber(r.planned_trays) + asNumber(r.sessions_count) + asNumber(r.cancelled_count) > 0);
+      const active = rows.filter(r => asNumber(r.planned_trays) + asNumber(r.sessions_count) + asNumber(r.cancelled_count) + asNumber(r.planned_bags) > 0);
       const bags = active.reduce((s,r) => s + asNumber(r.planned_bags), 0);
       const trays = active.reduce((s,r) => s + asNumber(r.planned_trays), 0);
       const cancelled = active.reduce((s,r) => s + asNumber(r.cancelled_count), 0);
-      if (q("#kpiActiveDays")) q("#kpiActiveDays").textContent = fmt(active.length);
-      if (q("#kpiBags")) q("#kpiBags").textContent = fmt(bags);
-      if (q("#kpiTrays")) q("#kpiTrays").textContent = fmt(trays);
-      if (q("#kpiCancelled")) q("#kpiCancelled").textContent = fmt(cancelled);
-    } catch(e) {}
+      setKpi(active.length, bags, trays, cancelled);
+    } catch(e) {
+      setKpi(0,0,0,0);
+    }
   }
 
   function bind(){
@@ -151,6 +161,7 @@
     new MutationObserver(() => {
       improveUserSection();
       setTab(localStorage.getItem(KEY) || "pulpit");
+      refreshKpi();
     }).observe(grid, { childList:true });
   }
 
@@ -168,9 +179,7 @@
     });
   }
 
-  function findUsersSection(){
-    return qa(".adminSection").find(section => titleOf(section).includes("użytkownicy"));
-  }
+  function findUsersSection(){ return qa(".adminSection").find(section => titleOf(section).includes("użytkownicy")); }
 
   function improveUserSection(){
     const section = findUsersSection();
@@ -224,7 +233,8 @@
     wrapRefresh();
     setTab(localStorage.getItem(KEY) || "pulpit");
     refreshKpi();
-    setTimeout(() => { improveUserSection(); setTab(localStorage.getItem(KEY) || "pulpit"); refreshKpi(); }, 800);
+    setTimeout(() => { improveUserSection(); setTab(localStorage.getItem(KEY) || "pulpit"); refreshKpi(); }, 400);
+    setTimeout(refreshKpi, 1400);
   }
 
   if (document.readyState === "loading") window.addEventListener("DOMContentLoaded", start);
