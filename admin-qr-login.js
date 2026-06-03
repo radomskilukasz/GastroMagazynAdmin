@@ -22,9 +22,9 @@
 
   function loadAdminTabs(){
     loadCssOnce('admin-tabs.css', 'admin-tabs.css?v=2');
-    loadCssOnce('admin-tabs-polish.css', 'admin-tabs-polish.css?v=1');
+    loadCssOnce('admin-tabs-polish.css', 'admin-tabs-polish.css?v=2');
     loadScriptOnce('admin-tabs.js', 'admin-tabs.js?v=3');
-    loadScriptOnce('admin-branding.js', 'admin-branding.js?v=1');
+    loadScriptOnce('admin-branding.js', 'admin-branding.js?v=2');
   }
 
   function byId(id){ return document.getElementById(id); }
