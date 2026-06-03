@@ -1,0 +1,304 @@
+/* Tabs / sidebar layout for admin panel */
+
+.pageShell {
+  max-width:none;
+}
+
+.adminAppLayout {
+  min-height:calc(100vh - 48px);
+  display:grid;
+  grid-template-columns:230px minmax(0, 1fr);
+  gap:0;
+  border:1px solid rgba(148,163,184,.14);
+  border-radius:18px;
+  overflow:hidden;
+  background:rgba(3,8,13,.45);
+  box-shadow:0 32px 100px rgba(0,0,0,.45);
+}
+
+.adminSidebar {
+  display:flex;
+  flex-direction:column;
+  gap:22px;
+  padding:24px 12px;
+  background:linear-gradient(180deg, rgba(5,13,20,.98), rgba(4,9,14,.98));
+  border-right:1px solid rgba(148,163,184,.14);
+}
+
+.adminSidebarBrand {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:0 12px 20px;
+  border-bottom:1px solid rgba(148,163,184,.12);
+}
+
+.adminSidebarBrand img {
+  width:46px;
+  height:auto;
+  filter:drop-shadow(0 0 18px rgba(249,115,22,.30));
+}
+
+.brandName {
+  color:var(--orange);
+  font-size:26px;
+  font-weight:950;
+  line-height:1;
+  letter-spacing:-.04em;
+}
+
+.brandSub {
+  color:#cbd5e1;
+  margin-top:5px;
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.14em;
+  font-weight:900;
+}
+
+.adminSideNav {
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+.adminTabButton {
+  width:100%;
+  min-height:54px;
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  gap:13px;
+  padding:14px 16px;
+  border-radius:10px;
+  background:transparent;
+  border:1px solid transparent;
+  box-shadow:none;
+  color:#94a3b8;
+  font-size:16px;
+  font-weight:800;
+}
+
+.adminTabButton:hover {
+  transform:none;
+  background:rgba(249,115,22,.10);
+  border-color:rgba(249,115,22,.18);
+  box-shadow:none;
+  color:#fff7ed;
+}
+
+.adminTabButton.active {
+  color:var(--orange);
+  background:linear-gradient(90deg, rgba(249,115,22,.22), rgba(249,115,22,.08));
+  border-color:rgba(249,115,22,.24);
+  box-shadow:inset 3px 0 0 var(--orange);
+}
+
+.adminTabButton span {
+  width:22px;
+  text-align:center;
+  color:inherit;
+  font-size:20px;
+  font-weight:900;
+}
+
+.adminTabButton b {
+  font-weight:900;
+}
+
+.adminSidebarFooter {
+  margin-top:auto;
+  padding:18px 12px 6px;
+  border-top:1px solid rgba(148,163,184,.10);
+  color:#94a3b8;
+  font-size:13px;
+  line-height:1.8;
+}
+
+.onlineDot {
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+.onlineDot span {
+  width:9px;
+  height:9px;
+  border-radius:999px;
+  background:var(--green);
+  box-shadow:0 0 14px rgba(34,197,94,.75);
+}
+
+.adminMainArea {
+  min-width:0;
+  padding:24px 28px 30px;
+}
+
+.adminAppLayout .adminHeader {
+  margin-bottom:22px;
+  box-shadow:none;
+  background:transparent;
+  border:none;
+  border-radius:0;
+  padding:0 0 22px;
+  border-bottom:1px solid rgba(148,163,184,.12);
+}
+
+.adminAppLayout .adminHeader::before {
+  display:none;
+}
+
+.adminAppLayout .adminLogo {
+  display:none;
+}
+
+.adminAppLayout .adminHeader h1 {
+  font-size:32px;
+}
+
+.adminKpiGrid {
+  display:grid;
+  grid-template-columns:repeat(5, minmax(0, 1fr));
+  gap:14px;
+  margin-bottom:18px;
+}
+
+.adminKpiCard {
+  display:flex;
+  align-items:center;
+  gap:16px;
+  min-height:118px;
+  padding:20px;
+  border-radius:12px;
+  background:linear-gradient(180deg, rgba(17,27,38,.96), rgba(8,15,24,.96));
+  border:1px solid rgba(148,163,184,.14);
+  box-shadow:0 18px 45px rgba(0,0,0,.24);
+}
+
+.adminKpiCard .kpiIcon {
+  width:58px;
+  height:58px;
+  border-radius:999px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 auto;
+  color:var(--orange);
+  border:3px solid rgba(249,115,22,.75);
+  text-shadow:0 0 18px rgba(249,115,22,.55);
+  box-shadow:0 0 24px rgba(249,115,22,.12);
+  font-size:34px;
+  font-weight:900;
+}
+
+.adminKpiCard.red .kpiIcon {
+  color:#ff6b6b;
+  border-color:#ef4444;
+  text-shadow:0 0 18px rgba(239,68,68,.55);
+  box-shadow:0 0 24px rgba(239,68,68,.14);
+}
+
+.adminKpiCard.green .kpiIcon {
+  color:#4ade80;
+  border-color:#22c55e;
+  text-shadow:0 0 18px rgba(34,197,94,.60);
+  box-shadow:0 0 24px rgba(34,197,94,.14);
+}
+
+.kpiLabel {
+  color:#94a3b8;
+  font-size:12px;
+  font-weight:950;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+
+.kpiValue {
+  color:#f8fafc;
+  font-size:30px;
+  line-height:1.05;
+  font-weight:950;
+  letter-spacing:-.04em;
+  margin-top:6px;
+}
+
+.kpiSub {
+  color:#94a3b8;
+  font-size:13px;
+  margin-top:5px;
+}
+
+.adminGrid {
+  grid-template-columns:1fr 1fr 1fr;
+  gap:16px;
+}
+
+.adminGrid > .adminSection {
+  grid-column:auto;
+}
+
+.adminGrid > .adminSection.fullWidth {
+  grid-column:auto;
+}
+
+.adminGrid > .adminSection:nth-child(1),
+.adminGrid > .adminSection:nth-child(2),
+#activeDaysPanel {
+  grid-column:span 1;
+}
+
+.adminGrid > .adminSection.adminTabHidden {
+  display:none !important;
+}
+
+body[data-admin-tab="pulpit"] .adminGrid > .adminSection:not(.adminTabHidden) {
+  min-height:0;
+}
+
+.adminSection {
+  border-radius:12px;
+}
+
+.sectionHeader {
+  padding:20px 22px 14px;
+}
+
+.sectionHeader h2 {
+  font-size:20px;
+}
+
+.sectionBody {
+  padding:18px 22px 22px;
+}
+
+.adminTip {
+  font-size:12px;
+}
+
+#activeDaysPanel table th:nth-child(n+5),
+#activeDaysPanel table td:nth-child(n+5) {
+  display:none;
+}
+
+#activeDaysPanel .roleBox {
+  grid-template-columns:minmax(0,1fr) auto auto;
+}
+
+@media(max-width:1250px){
+  .adminAppLayout { grid-template-columns:1fr; }
+  .adminSidebar { position:relative; display:block; padding:14px; border-right:none; border-bottom:1px solid rgba(148,163,184,.14); }
+  .adminSidebarBrand { display:none; }
+  .adminSideNav { flex-direction:row; overflow:auto; gap:8px; }
+  .adminTabButton { width:auto; min-width:max-content; }
+  .adminSidebarFooter { display:none; }
+  .adminKpiGrid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .adminGrid { grid-template-columns:1fr; }
+}
+
+@media(max-width:760px){
+  body { padding:0; }
+  .adminAppLayout { min-height:100vh; border-radius:0; border:none; }
+  .adminMainArea { padding:16px; }
+  .adminKpiGrid { grid-template-columns:1fr; }
+  .headerActions { width:100%; }
+}
