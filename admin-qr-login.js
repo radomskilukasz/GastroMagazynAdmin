@@ -11,16 +11,20 @@
     }
   }
 
-  function loadAdminTabs(){
-    loadCssOnce('admin-tabs.css', 'admin-tabs.css?v=2');
-    loadCssOnce('admin-tabs-polish.css', 'admin-tabs-polish.css?v=1');
-
-    if (!document.querySelector('script[src*="admin-tabs.js"]')) {
+  function loadScriptOnce(srcPart, src){
+    if (!document.querySelector('script[src*="' + srcPart + '"]')) {
       var script = document.createElement('script');
-      script.src = 'admin-tabs.js?v=2';
+      script.src = src;
       script.async = false;
       document.body.appendChild(script);
     }
+  }
+
+  function loadAdminTabs(){
+    loadCssOnce('admin-tabs.css', 'admin-tabs.css?v=2');
+    loadCssOnce('admin-tabs-polish.css', 'admin-tabs-polish.css?v=1');
+    loadScriptOnce('admin-tabs.js', 'admin-tabs.js?v=3');
+    loadScriptOnce('admin-branding.js', 'admin-branding.js?v=1');
   }
 
   function byId(id){ return document.getElementById(id); }
@@ -144,6 +148,7 @@
       if (byId('adminPanel')) byId('adminPanel').classList.remove('hidden');
       loadAdminTabs();
       await refreshAdminData();
+      if (typeof window.applyAdminBranding === 'function') window.applyAdminBranding();
 
     } catch (err) {
       setLoginStatus('❌ Błąd logowania QR: ' + err.message, 'bad');
