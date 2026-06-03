@@ -5,15 +5,18 @@ let postReportDeletePreviewRow = null;
   if (!document.querySelector('link[href*="dark-control-room.css"]')) {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
-    link.href = 'dark-control-room.css?v=1';
+    link.href = 'dark-control-room.css?v=2';
     document.head.appendChild(link);
   }
 })();
 
 (function loadAdminQrLoginOnlyFromPostReportDelete(){
+  const old = document.querySelector('script[src*="admin-qr-login.js"]');
+  if (old && old.src.indexOf('v=3') === -1) old.remove();
+
   if (!document.querySelector('script[src*="admin-qr-login.js"]')) {
     const script = document.createElement('script');
-    script.src = 'admin-qr-login.js?v=1';
+    script.src = 'admin-qr-login.js?v=3';
     script.async = false;
     document.body.appendChild(script);
   }
