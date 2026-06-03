@@ -25,6 +25,19 @@
   function qa(sel, root){ return Array.from((root || document).querySelectorAll(sel)); }
   function titleOf(section){ return String(section.querySelector("h2")?.textContent || "").toLowerCase(); }
 
+  function loadScriptOnce(srcPart, src){
+    if (!document.querySelector('script[src*="' + srcPart + '"]')) {
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = false;
+      document.body.appendChild(script);
+    }
+  }
+
+  function loadPostReportAutodate(){
+    loadScriptOnce('post-report-autodate.js', 'post-report-autodate.js?v=1');
+  }
+
   function classify(section){
     const t = titleOf(section);
     const out = new Set();
@@ -182,6 +195,7 @@
       improveUserSection();
       setTab(localStorage.getItem(KEY) || "pulpit");
       refreshKpi();
+      loadPostReportAutodate();
     }).observe(grid, { childList:true });
   }
 
@@ -238,6 +252,7 @@
       improveUserSection();
       await refreshKpi();
       setTab(localStorage.getItem(KEY) || "pulpit");
+      loadPostReportAutodate();
       return result;
     };
     wrapped.__tabsWrap = true;
@@ -253,7 +268,8 @@
     wrapRefresh();
     setTab(localStorage.getItem(KEY) || "pulpit");
     refreshKpi();
-    setTimeout(() => { improveUserSection(); setTab(localStorage.getItem(KEY) || "pulpit"); refreshKpi(); bind(); }, 400);
+    loadPostReportAutodate();
+    setTimeout(() => { improveUserSection(); setTab(localStorage.getItem(KEY) || "pulpit"); refreshKpi(); bind(); loadPostReportAutodate(); }, 400);
     setTimeout(refreshKpi, 1400);
   }
 
