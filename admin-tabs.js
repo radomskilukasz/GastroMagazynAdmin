@@ -1,21 +1,28 @@
 (function(){
   const KEY = "gastro_admin_tab";
+  const USER_KEY = "gastro_admin_user_tab";
+
   const tabs = [
-    ["pulpit", "▦", "Pulpit"],
-    ["import", "⇩", "Import CSV"],
-    ["dni", "▣", "Dni robocze"],
-    ["raporty", "▤", "Raporty"],
-    ["torby", "▢", "Torby"],
-    ["uzytkownicy", "◌", "Użytkownicy"],
-    ["narzedzia", "⚙", "Narzędzia"]
+    ["pulpit", "▦", "Pulpit", "Najważniejsze akcje i stan systemu"],
+    ["import", "⇩", "Import CSV", "Wgrywanie nowego planu i danych klienta"],
+    ["dni", "▣", "Dni robocze", "Aktywne daty i zamykanie dnia"],
+    ["raporty", "▤", "Raporty", "Eksporty, archiwum i czyszczenie"],
+    ["torby", "▢", "Torby", "Odwołania i testowe etykiety"],
+    ["uzytkownicy", "◌", "Użytkownicy", "Role, konta oraz QR logowania"],
+    ["narzedzia", "⚙", "Narzędzia", "Techniczne funkcje pomocnicze" ]
+  ];
+
+  const userTabs = [
+    ["lista", "Lista"],
+    ["dodaj", "Dodaj"],
+    ["role", "Role"],
+    ["qr", "QR"]
   ];
 
   function q(sel, root){ return (root || document).querySelector(sel); }
   function qa(sel, root){ return Array.from((root || document).querySelectorAll(sel)); }
 
-  function titleOf(section){
-    return String(section.querySelector("h2")?.textContent || "").toLowerCase();
-  }
+  function titleOf(section){ return String(section.querySelector("h2")?.textContent || "").toLowerCase(); }
 
   function classify(section){
     const t = titleOf(section);
@@ -52,9 +59,9 @@
         <div><div class="brandName">MealFlow</div><div class="brandSub">Catering Logistics</div></div>
       </div>
       <nav class="adminSideNav">
-        ${tabs.map(x => `<button type="button" class="adminTabButton" data-tab="${x[0]}"><span>${x[1]}</span><b>${x[2]}</b></button>`).join("")}
+        ${tabs.map(x => `<button type="button" class="adminTabButton" data-tab="${x[0]}" title="${x[3]}"><span>${x[1]}</span><b>${x[2]}</b></button>`).join("")}
       </nav>
-      <div class="adminSidebarFooter"><div>v2.5.0</div><div class="onlineDot"><span></span> Online</div></div>
+      <div class="adminSidebarFooter"><div>v2.6.0</div><div class="onlineDot"><span></span> System online</div></div>
     `;
 
     const main = document.createElement("main");
@@ -64,6 +71,11 @@
     layout.appendChild(side);
     layout.appendChild(main);
     main.appendChild(header);
+
+    const toolbar = document.createElement("section");
+    toolbar.className = "adminTabToolbar";
+    toolbar.innerHTML = `<div><div class="toolbarEyebrow">Widok</div><h2 id="adminTabTitle">Pulpit</h2><p id="adminTabSubtitle">Najważniejsze akcje i stan systemu</p></div>`;
+    main.appendChild(toolbar);
 
     const kpi = document.createElement("section");
     kpi.className = "adminKpiGrid";
@@ -82,11 +94,17 @@
 
   function classifyAll(){ qa(".adminGrid > .adminSection").forEach(classify); }
 
+  function tabMeta(id){ return tabs.find(x => x[0] === id) || tabs[0]; }
+
   function setTab(id){
     const exists = tabs.some(x => x[0] === id);
     const tab = exists ? id : "pulpit";
     localStorage.setItem(KEY, tab);
     document.body.dataset.adminTab = tab;
+
+    const meta = tabMeta(tab);
+    if (q("#adminTabTitle")) q("#adminTabTitle").textContent = meta[2];
+    if (q("#adminTabSubtitle")) q("#adminTabSubtitle").textContent = meta[3];
 
     qa(".adminTabButton").forEach(btn => btn.classList.toggle("active", btn.dataset.tab === tab));
     classifyAll();
@@ -95,33 +113,92 @@
       const list = String(section.dataset.adminTabs || "").split(/\s+/);
       section.classList.toggle("adminTabHidden", !list.includes(tab));
     });
+
+    setTimeout(() => window.scrollTo({ top:0, behavior:"smooth" }), 20);
   }
+
+  function asNumber(v){ return Number(v || 0); }
+  function fmt(v){ return asNumber(v).toLocaleString("pl-PL"); }
 
   async function refreshKpi(){
     if (!window.supabaseClient) return;
     try {
       const res = await window.supabaseClient.rpc("active_packing_days");
       const rows = (res.data || []).filter(r => r && r.meal_date);
-      const active = rows.filter(r => Number(r.planned_trays || 0) + Number(r.sessions_count || 0) + Number(r.cancelled_count || 0) > 0);
-      const bags = active.reduce((s,r) => s + Number(r.planned_bags || 0), 0);
-      const trays = active.reduce((s,r) => s + Number(r.planned_trays || 0), 0);
-      const cancelled = active.reduce((s,r) => s + Number(r.cancelled_count || 0), 0);
-      if (q("#kpiActiveDays")) q("#kpiActiveDays").textContent = active.length.toLocaleString("pl-PL");
-      if (q("#kpiBags")) q("#kpiBags").textContent = bags.toLocaleString("pl-PL");
-      if (q("#kpiTrays")) q("#kpiTrays").textContent = trays.toLocaleString("pl-PL");
-      if (q("#kpiCancelled")) q("#kpiCancelled").textContent = cancelled.toLocaleString("pl-PL");
+      const active = rows.filter(r => asNumber(r.planned_trays) + asNumber(r.sessions_count) + asNumber(r.cancelled_count) > 0);
+      const bags = active.reduce((s,r) => s + asNumber(r.planned_bags), 0);
+      const trays = active.reduce((s,r) => s + asNumber(r.planned_trays), 0);
+      const cancelled = active.reduce((s,r) => s + asNumber(r.cancelled_count), 0);
+      if (q("#kpiActiveDays")) q("#kpiActiveDays").textContent = fmt(active.length);
+      if (q("#kpiBags")) q("#kpiBags").textContent = fmt(bags);
+      if (q("#kpiTrays")) q("#kpiTrays").textContent = fmt(trays);
+      if (q("#kpiCancelled")) q("#kpiCancelled").textContent = fmt(cancelled);
     } catch(e) {}
   }
 
   function bind(){
-    qa(".adminTabButton").forEach(btn => btn.addEventListener("click", () => setTab(btn.dataset.tab)));
+    qa(".adminTabButton").forEach(btn => {
+      if (btn.dataset.bound === "1") return;
+      btn.dataset.bound = "1";
+      btn.addEventListener("click", () => setTab(btn.dataset.tab));
+    });
   }
 
   function observe(){
     const grid = q(".adminGrid");
     if (!grid || grid.dataset.tabObserver === "1") return;
     grid.dataset.tabObserver = "1";
-    new MutationObserver(() => setTab(localStorage.getItem(KEY) || "pulpit")).observe(grid, { childList:true });
+    new MutationObserver(() => {
+      improveUserSection();
+      setTab(localStorage.getItem(KEY) || "pulpit");
+    }).observe(grid, { childList:true });
+  }
+
+  function setUserSubTab(id){
+    const active = userTabs.some(x => x[0] === id) ? id : "lista";
+    localStorage.setItem(USER_KEY, active);
+    const section = findUsersSection();
+    if (!section) return;
+
+    section.dataset.userSubtab = active;
+    qa("[data-user-subtab-button]", section).forEach(btn => btn.classList.toggle("active", btn.dataset.userSubtabButton === active));
+    qa(".subPanel", section).forEach(panel => {
+      const type = panel.dataset.userPanel || "inne";
+      panel.classList.toggle("userPanelHidden", type !== active && !(active === "lista" && type === "status"));
+    });
+  }
+
+  function findUsersSection(){
+    return qa(".adminSection").find(section => titleOf(section).includes("użytkownicy"));
+  }
+
+  function improveUserSection(){
+    const section = findUsersSection();
+    if (!section || section.dataset.userImproved === "1") return;
+
+    const panels = qa(".subPanel", section);
+    panels.forEach(panel => {
+      const text = String(panel.textContent || "").toLowerCase();
+      if (text.includes("lista użytkowników")) panel.dataset.userPanel = "lista";
+      else if (text.includes("status qr")) panel.dataset.userPanel = "lista";
+      else if (text.includes("dodaj nowego")) panel.dataset.userPanel = "dodaj";
+      else if (text.includes("nadaj rolę")) panel.dataset.userPanel = "role";
+      else if (text.includes("usuń użytkownika")) panel.dataset.userPanel = "role";
+      else if (text.includes("kody qr")) panel.dataset.userPanel = "qr";
+      else panel.dataset.userPanel = "inne";
+    });
+
+    const body = q(".sectionBody .actionStack", section);
+    if (body) {
+      const nav = document.createElement("div");
+      nav.className = "userSubTabs";
+      nav.innerHTML = userTabs.map(x => `<button type="button" data-user-subtab-button="${x[0]}">${x[1]}</button>`).join("");
+      body.insertBefore(nav, body.firstChild);
+      qa("[data-user-subtab-button]", nav).forEach(btn => btn.addEventListener("click", () => setUserSubTab(btn.dataset.userSubtabButton)));
+    }
+
+    section.dataset.userImproved = "1";
+    setUserSubTab(localStorage.getItem(USER_KEY) || "lista");
   }
 
   function wrapRefresh(){
@@ -129,6 +206,7 @@
     if (typeof old !== "function" || old.__tabsWrap) return;
     const wrapped = async function(){
       const result = await old.apply(this, arguments);
+      improveUserSection();
       await refreshKpi();
       setTab(localStorage.getItem(KEY) || "pulpit");
       return result;
@@ -141,11 +219,12 @@
     addLayout();
     bind();
     classifyAll();
+    improveUserSection();
     observe();
     wrapRefresh();
     setTab(localStorage.getItem(KEY) || "pulpit");
     refreshKpi();
-    setTimeout(() => { setTab(localStorage.getItem(KEY) || "pulpit"); refreshKpi(); }, 800);
+    setTimeout(() => { improveUserSection(); setTab(localStorage.getItem(KEY) || "pulpit"); refreshKpi(); }, 800);
   }
 
   if (document.readyState === "loading") window.addEventListener("DOMContentLoaded", start);
