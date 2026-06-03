@@ -2,6 +2,22 @@
 (function(){
   var QR_FN = 'qr-login-session';
 
+  function loadAdminTabs(){
+    if (!document.querySelector('link[href*="admin-tabs.css"]')) {
+      var link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'admin-tabs.css?v=1';
+      document.head.appendChild(link);
+    }
+
+    if (!document.querySelector('script[src*="admin-tabs.js"]')) {
+      var script = document.createElement('script');
+      script.src = 'admin-tabs.js?v=1';
+      script.async = false;
+      document.body.appendChild(script);
+    }
+  }
+
   function byId(id){ return document.getElementById(id); }
   function norm(value){ return String(value || '').trim().replace(/\s+/g, ''); }
 
@@ -9,7 +25,7 @@
     if (byId('adminQrLoginStyles')) return;
     var style = document.createElement('style');
     style.id = 'adminQrLoginStyles';
-    style.textContent = '.adminQrLoginBox{margin:16px 0 18px;padding:16px;border-radius:18px;background:#eff6ff;border:1px solid #bfdbfe}.adminQrLoginBox label{color:#1e3a8a;font-weight:900}.adminQrLoginInput{width:100%;min-height:50px;margin-top:8px;border:2px solid #2563eb;border-radius:14px;padding:12px 14px;font-size:18px;font-weight:800;outline:none;background:#fff}.adminQrLoginInput:focus{box-shadow:0 0 0 4px rgba(37,99,235,.16)}.adminQrLoginBtn{width:100%;margin-top:10px}.adminQrDivider{display:flex;align-items:center;gap:10px;margin:16px 0 12px;color:#64748b;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.04em}.adminQrDivider:before,.adminQrDivider:after{content:"";height:1px;background:#e5e7eb;flex:1}';
+    style.textContent = '.adminQrLoginBox{margin:16px 0 18px;padding:16px;border-radius:18px;background:rgba(249,115,22,.10);border:1px solid rgba(249,115,22,.25)}.adminQrLoginBox label{color:#fdba74;font-weight:900}.adminQrLoginInput{width:100%;min-height:50px;margin-top:8px;border:2px solid rgba(249,115,22,.45);border-radius:14px;padding:12px 14px;font-size:18px;font-weight:800;outline:none;background:#09111b;color:#f8fafc}.adminQrLoginInput:focus{box-shadow:0 0 0 4px rgba(249,115,22,.16)}.adminQrLoginBtn{width:100%;margin-top:10px}.adminQrDivider{display:flex;align-items:center;gap:10px;margin:16px 0 12px;color:#94a3b8;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.04em}.adminQrDivider:before,.adminQrDivider:after{content:"";height:1px;background:rgba(148,163,184,.24);flex:1}';
     document.head.appendChild(style);
   }
 
@@ -121,6 +137,7 @@
 
       if (byId('loginScreen')) byId('loginScreen').classList.add('hidden');
       if (byId('adminPanel')) byId('adminPanel').classList.remove('hidden');
+      loadAdminTabs();
       await refreshAdminData();
 
     } catch (err) {
@@ -144,7 +161,7 @@
     };
   }
 
-  function init(){ injectUi(); updateTexts(); }
+  function init(){ injectUi(); updateTexts(); loadAdminTabs(); }
   if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', init);
   else init();
 })();
