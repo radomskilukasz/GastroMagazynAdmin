@@ -2,17 +2,22 @@
 (function(){
   var QR_FN = 'qr-login-session';
 
-  function loadAdminTabs(){
-    if (!document.querySelector('link[href*="admin-tabs.css"]')) {
+  function loadCssOnce(hrefPart, href){
+    if (!document.querySelector('link[href*="' + hrefPart + '"]')) {
       var link = document.createElement('link');
       link.rel = 'stylesheet';
-      link.href = 'admin-tabs.css?v=1';
+      link.href = href;
       document.head.appendChild(link);
     }
+  }
+
+  function loadAdminTabs(){
+    loadCssOnce('admin-tabs.css', 'admin-tabs.css?v=2');
+    loadCssOnce('admin-tabs-polish.css', 'admin-tabs-polish.css?v=1');
 
     if (!document.querySelector('script[src*="admin-tabs.js"]')) {
       var script = document.createElement('script');
-      script.src = 'admin-tabs.js?v=1';
+      script.src = 'admin-tabs.js?v=2';
       script.async = false;
       document.body.appendChild(script);
     }
