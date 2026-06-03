@@ -1,5 +1,6 @@
 let postReportDeleteBags = [];
 let postReportDeletePreviewRow = null;
+let postReportDeleteCsvInfo = null;
 
 (function loadAdminDarkControlRoomTheme(){
   if (!document.querySelector('link[href*="dark-control-room.css"]')) {
@@ -30,6 +31,11 @@ function getPostReportMealDate() {
   return String(el("postReportMealDateInput")?.value || "").trim();
 }
 
+function setPostReportMealDate(value) {
+  const input = el("postReportMealDateInput");
+  if (input && value) input.value = value;
+}
+
 function normalizeBagForDelete(value) {
   return String(value || "")
     .trim()
@@ -46,9 +52,23 @@ function normalizeBagForDelete(value) {
     .replaceAll("Ż", "Z");
 }
 
+function normalizeHeaderForDelete(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^\uFEFF/, "")
+    .replace(/[ąćęłńóśźż]/g, ch => ({
+      "ą":"a", "ć":"c", "ę":"e", "ł":"l", "ń":"n", "ó":"o", "ś":"s", "ź":"z", "ż":"z"
+    }[ch] || ch))
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
 function detectCsvDelimiter(line) {
   const semicolons = (String(line || "").match(/;/g) || []).length;
   const commas = (String(line || "").match(/,/g) || []).length;
+  const tabs = (String(line || "").match(/\t/g) || []).length;
+  if (tabs > semicolons && tabs > commas) return "\t";
   return semicolons >= commas ? ";" : ",";
 }
 
@@ -85,60 +105,161 @@ function parseCsvLineForDelete(line, delimiter) {
   return out;
 }
 
-function extractBagQrsFromDeleteCsv(text) {
+function normalizeDateForDelete(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const iso = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) {
+    return `${iso[1]}-${String(iso[2]).padStart(2, "0")}-${String(iso[3]).padStart(2, "0")}`;
+  }
+
+  const pl = raw.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/);
+  if (pl) {
+    return `${pl[3]}-${String(pl[2]).padStart(2, "0")}-${String(pl[1]).padStart(2, "0")}`;
+  }
+
+  const shortPl = raw.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2})$/);
+  if (shortPl) {
+    return `20${shortPl[3]}-${String(shortPl[2]).padStart(2, "0")}-${String(shortPl[1]).padStart(2, "0")}`;
+  }
+
+  return "";
+}
+
+function findHeaderIndex(headers, aliases) {
+  return headers.findIndex(h => aliases.includes(h));
+}
+
+function parsePostReportDeleteCsv(text) {
   const clean = String(text || "").replace(/^\uFEFF/, "");
   const lines = clean.split(/\r?\n/).filter(line => line.trim() !== "");
 
-  if (!lines.length) return [];
+  if (!lines.length) {
+    return { bags: [], rowsCount: 0, uniqueClients: 0, dates: [], duplicateCount: 0, format: "empty", examples: [] };
+  }
 
   const delimiter = detectCsvDelimiter(lines[0]);
   const firstRow = parseCsvLineForDelete(lines[0], delimiter);
-  const normalizedHeaders = firstRow.map(x => String(x || "").trim().toLowerCase().replace(/\s+/g, "_"));
+  const normalizedHeaders = firstRow.map(normalizeHeaderForDelete);
 
-  let bagIndex = normalizedHeaders.findIndex(h => [
+  let bagIndex = findHeaderIndex(normalizedHeaders, [
     "bag_qr",
     "qr_torby",
     "qr_torba",
     "kod_torby",
-    "torba"
-  ].includes(h));
+    "torba",
+    "paczka",
+    "qr_paczki"
+  ]);
 
-  let startIndex = 0;
+  let dateIndex = findHeaderIndex(normalizedHeaders, [
+    "delivery_date",
+    "meal_date",
+    "dzien_jedzony",
+    "data_dostawy",
+    "data",
+    "data_pakowania"
+  ]);
 
-  if (bagIndex >= 0) {
-    startIndex = 1;
-  } else {
+  let clientIndex = findHeaderIndex(normalizedHeaders, [
+    "client_id",
+    "id_klienta",
+    "klient",
+    "order_id",
+    "id_zamowienia"
+  ]);
+
+  let startIndex = 1;
+  let format = "new_csv";
+
+  if (bagIndex < 0) {
+    const looksLikeHeader = normalizedHeaders.some(h => ["client_id", "delivery_date", "tray_qr", "meal", "code", "size", "dish_name"].includes(h));
+
+    if (looksLikeHeader) {
+      return {
+        bags: [],
+        rowsCount: Math.max(0, lines.length - 1),
+        uniqueClients: 0,
+        dates: [],
+        duplicateCount: 0,
+        format: "missing_bag_qr",
+        examples: [],
+        headers: normalizedHeaders
+      };
+    }
+
+    // Awaryjny stary format: pierwsza kolumna = bag_qr bez nagłówka.
     bagIndex = 0;
-    startIndex = firstRow.some(cell => String(cell || "").toLowerCase().includes("bag") || String(cell || "").toLowerCase().includes("torb")) ? 1 : 0;
+    dateIndex = -1;
+    clientIndex = -1;
+    startIndex = 0;
+    format = "single_column_bag_qr";
   }
 
   const bags = [];
-  const seen = new Set();
+  const seenBags = new Set();
+  const clients = new Set();
+  const dates = new Set();
+  const examples = [];
+  let duplicateCount = 0;
 
   for (let i = startIndex; i < lines.length; i++) {
     const row = parseCsvLineForDelete(lines[i], delimiter);
     const bag = normalizeBagForDelete(row[bagIndex]);
 
-    if (!bag || seen.has(bag)) continue;
+    if (!bag) continue;
 
-    seen.add(bag);
-    bags.push(bag);
+    const clientId = clientIndex >= 0 ? String(row[clientIndex] || "").trim() : "";
+    const mealDate = dateIndex >= 0 ? normalizeDateForDelete(row[dateIndex]) : "";
+
+    if (clientId) clients.add(clientId);
+    if (mealDate) dates.add(mealDate);
+
+    if (seenBags.has(bag)) {
+      duplicateCount++;
+    } else {
+      seenBags.add(bag);
+      bags.push(bag);
+
+      if (examples.length < 8) {
+        examples.push({ bag, clientId, mealDate });
+      }
+    }
   }
 
-  return bags;
+  return {
+    bags,
+    rowsCount: Math.max(0, lines.length - startIndex),
+    uniqueClients: clients.size,
+    dates: Array.from(dates).sort(),
+    duplicateCount,
+    format,
+    examples,
+    headers: normalizedHeaders
+  };
 }
 
-function renderPostReportPreview(row, bags) {
+function renderPostReportPreview(row, bags, csvInfo) {
   const missing = row?.missing_bags || [];
   const previewBox = el("postReportDeletePreview");
   if (!previewBox) return;
+
+  const examples = (csvInfo?.examples || [])
+    .map(x => `<tr><td>${escapeHtml(x.bag)}</td><td>${escapeHtml(x.clientId || "-")}</td><td>${escapeHtml(x.mealDate || "-")}</td></tr>`)
+    .join("");
 
   previewBox.innerHTML = `
     <div class="tableWrap">
       <table>
         <tbody>
           <tr><th>Dzień jedzony</th><td><b>${escapeHtml(formatDatePL(row.meal_date))}</b></td></tr>
+          <tr><th>Format CSV</th><td>${csvInfo?.format === "new_csv" ? "Nowy CSV z importu" : "Prosty plik z bag_qr"}</td></tr>
+          <tr><th>Wiersze w pliku</th><td>${Number(csvInfo?.rowsCount || 0)}</td></tr>
           <tr><th>Unikalne torby w pliku</th><td><b>${Number(row.input_bags || bags.length || 0)}</b></td></tr>
+          <tr><th>Unikalni klienci z pliku</th><td>${Number(csvInfo?.uniqueClients || 0) || "-"}</td></tr>
+          <tr><th>Daty wykryte w pliku</th><td>${(csvInfo?.dates || []).length ? escapeHtml(csvInfo.dates.map(formatDatePL).join(" | ")) : "-"}</td></tr>
+          <tr><th>Duplikaty bag_qr w CSV</th><td>${Number(csvInfo?.duplicateCount || 0)}</td></tr>
           <tr><th>Znalezione w aktualnym planie</th><td><b>${Number(row.found_in_plan || 0)}</b></td></tr>
           <tr><th>Już odwołane</th><td><b>${Number(row.already_cancelled || 0)}</b></td></tr>
           <tr><th>Wiersze packing_plan</th><td>${Number(row.packing_plan_rows || 0)}</td></tr>
@@ -147,42 +268,72 @@ function renderPostReportPreview(row, bags) {
         </tbody>
       </table>
     </div>
+
+    ${examples ? `
+      <div class="tableWrap" style="margin-top:12px;">
+        <table>
+          <thead><tr><th>Przykładowe torby</th><th>Klient</th><th>Data z CSV</th></tr></thead>
+          <tbody>${examples}</tbody>
+        </table>
+      </div>
+    ` : ""}
   `;
 }
 
 async function previewPostReportDelete() {
   const input = el("postReportDeleteFile");
   const file = input?.files?.[0];
-  const selectedMealDate = getPostReportMealDate();
 
   postReportDeleteBags = [];
   postReportDeletePreviewRow = null;
+  postReportDeleteCsvInfo = null;
   el("postReportDeletePreview").innerHTML = "";
 
-  if (!selectedMealDate) {
-    setPostReportDeleteStatus("❌ Wybierz dzień jedzony zmian poraportowych.", "bad");
-    return;
-  }
-
   if (!file) {
-    setPostReportDeleteStatus("❌ Wybierz plik CSV ze zmianami poraportowymi do odwołania.", "bad");
+    setPostReportDeleteStatus("❌ Wybierz CSV. Może to być nowy format importu albo prosty plik z kolumną bag_qr.", "bad");
     return;
   }
 
-  setPostReportDeleteStatus("⏳ Czytam CSV i sprawdzam plan dla wybranego dnia...", "info");
+  setPostReportDeleteStatus("⏳ Czytam CSV, wykrywam datę i sprawdzam torby...", "info");
 
   try {
     const text = await file.text();
-    const bags = extractBagQrsFromDeleteCsv(text);
+    const csvInfo = parsePostReportDeleteCsv(text);
+    let selectedMealDate = getPostReportMealDate();
 
-    if (!bags.length) {
-      setPostReportDeleteStatus("❌ Nie znalazłem żadnych kodów bag_qr w pliku. Sprawdź, czy pierwsza kolumna to QR torby / bag_qr.", "bad");
+    if (csvInfo.format === "missing_bag_qr") {
+      setPostReportDeleteStatus("❌ Plik wygląda jak nowy CSV, ale nie ma kolumny bag_qr. Nie wiem, które torby odwołać.", "bad");
+      return;
+    }
+
+    if (!csvInfo.bags.length) {
+      setPostReportDeleteStatus("❌ Nie znalazłem żadnych kodów bag_qr w pliku. W nowym CSV wymagana jest kolumna bag_qr.", "bad");
+      return;
+    }
+
+    if (!selectedMealDate && csvInfo.dates.length === 1) {
+      selectedMealDate = csvInfo.dates[0];
+      setPostReportMealDate(selectedMealDate);
+    }
+
+    if (!selectedMealDate) {
+      setPostReportDeleteStatus("❌ Nie wybrano dnia. Wybierz dzień ręcznie albo wgraj nowy CSV z jedną datą w kolumnie delivery_date.", "bad");
+      return;
+    }
+
+    if (csvInfo.dates.length > 1) {
+      setPostReportDeleteStatus(`❌ Plik zawiera kilka dat: ${csvInfo.dates.map(formatDatePL).join(" | ")}. Odwołania wykonuj osobnym plikiem dla jednej daty.`, "bad");
+      return;
+    }
+
+    if (csvInfo.dates.length === 1 && csvInfo.dates[0] !== selectedMealDate) {
+      setPostReportDeleteStatus(`❌ Data z CSV (${formatDatePL(csvInfo.dates[0])}) różni się od wybranej daty (${formatDatePL(selectedMealDate)}).`, "bad");
       return;
     }
 
     const { data, error } = await supabaseClient.rpc("admin_preview_cancel_bags_for_date", {
       target_meal_date: selectedMealDate,
-      target_bag_qrs: bags
+      target_bag_qrs: csvInfo.bags
     });
 
     if (error) {
@@ -191,13 +342,14 @@ async function previewPostReportDelete() {
     }
 
     const row = Array.isArray(data) ? data[0] : data;
-    postReportDeleteBags = bags;
+    postReportDeleteBags = csvInfo.bags;
     postReportDeletePreviewRow = row;
+    postReportDeleteCsvInfo = csvInfo;
 
-    renderPostReportPreview(row, bags);
+    renderPostReportPreview(row, csvInfo.bags, csvInfo);
 
     setPostReportDeleteStatus(
-      `✅ Podgląd gotowy. Plik: ${bags.length} toreb. Znaleziono w planie: ${Number(row?.found_in_plan || 0)}. Już odwołane: ${Number(row?.already_cancelled || 0)}.`,
+      `✅ Podgląd gotowy. Data: ${formatDatePL(selectedMealDate)}. Unikalne torby: ${csvInfo.bags.length}. Znaleziono w planie: ${Number(row?.found_in_plan || 0)}. Już odwołane: ${Number(row?.already_cancelled || 0)}.`,
       "ok"
     );
   } catch (err) {
@@ -219,6 +371,11 @@ async function executePostReportDelete() {
     return;
   }
 
+  if (postReportDeleteCsvInfo?.dates?.length === 1 && postReportDeleteCsvInfo.dates[0] !== selectedMealDate) {
+    setPostReportDeleteStatus("❌ Data zmieniła się po podglądzie. Wykonaj podgląd ponownie.", "bad");
+    return;
+  }
+
   if (confirmText !== "ODWOŁAJ") {
     setPostReportDeleteStatus("❌ Aby wykonać odwołanie, wpisz dokładnie: ODWOŁAJ", "bad");
     return;
@@ -229,7 +386,8 @@ async function executePostReportDelete() {
     text: "Ta operacja oznaczy wskazane torby statusem ODWOŁANA dla wybranego dnia jedzonego.",
     details:
       `Dzień jedzony: <b>${escapeHtml(formatDatePL(selectedMealDate))}</b><br>` +
-      `Torby w pliku: <b>${postReportDeleteBags.length}</b><br>` +
+      `Torby do odwołania: <b>${postReportDeleteBags.length}</b><br>` +
+      `Klienci z CSV: <b>${Number(postReportDeleteCsvInfo?.uniqueClients || 0) || "-"}</b><br>` +
       `Znalezione w planie: <b>${Number(postReportDeletePreviewRow?.found_in_plan || 0)}</b><br>` +
       `Już odwołane: <b>${Number(postReportDeletePreviewRow?.already_cancelled || 0)}</b>`,
     buttons: [
@@ -248,7 +406,7 @@ async function executePostReportDelete() {
     const { data, error } = await supabaseClient.rpc("admin_cancel_bags_for_date", {
       target_meal_date: selectedMealDate,
       target_bag_qrs: postReportDeleteBags,
-      reason_text: "Zmiany poraportowe / odwołanie torby z CSV"
+      reason_text: "Zmiany poraportowe / odwołanie torby z nowego CSV"
     });
 
     if (error) {
@@ -266,6 +424,7 @@ async function executePostReportDelete() {
     el("postReportDeleteConfirm").value = "";
     postReportDeleteBags = [];
     postReportDeletePreviewRow = null;
+    postReportDeleteCsvInfo = null;
 
     if (typeof refreshAdminData === "function") await refreshAdminData();
   } catch (err) {
@@ -275,9 +434,39 @@ async function executePostReportDelete() {
   }
 }
 
+function updatePostReportDeleteTexts() {
+  const fileInput = el("postReportDeleteFile");
+  const section = fileInput?.closest(".adminSection");
+  if (!section) return;
+
+  const hint = section.querySelector(".sectionHint");
+  if (hint) {
+    hint.textContent = "Wgraj nowy CSV i odwołaj wskazane torby dla konkretnego dnia. System czyta bag_qr oraz delivery_date.";
+  }
+
+  const labels = Array.from(section.querySelectorAll("label"));
+  labels.forEach(label => {
+    if (label.textContent.includes("CSV z torbami")) {
+      label.textContent = "CSV z nowego importu albo lista bag_qr";
+    }
+  });
+
+  const tip = section.querySelector(".adminTip");
+  if (tip) {
+    tip.innerHTML = "Obsługiwany jest nowy format: <b>client_id;delivery_date;zone;default_diet;variant;calories;bag_qr;tray_qr;meal;code;size;dish_name</b>. Możesz też awaryjnie wgrać prosty CSV z jedną kolumną <b>bag_qr</b>.";
+  }
+
+  const status = el("postReportDeleteStatus");
+  if (status && status.textContent.includes("wybierz dzień jedzony")) {
+    status.textContent = "Status: wybierz CSV. Dzień może zostać wykryty automatycznie z delivery_date albo ustawiony ręcznie.";
+  }
+}
+
 function bindPostReportDeleteButtons() {
   const previewButton = el("previewPostReportDeleteButton");
   const executeButton = el("executePostReportDeleteButton");
+
+  updatePostReportDeleteTexts();
 
   if (previewButton && previewButton.dataset.boundPostReportDelete !== "true") {
     previewButton.dataset.boundPostReportDelete = "true";
@@ -295,3 +484,6 @@ if (document.readyState === "loading") {
 } else {
   bindPostReportDeleteButtons();
 }
+
+setTimeout(updatePostReportDeleteTexts, 500);
+setTimeout(updatePostReportDeleteTexts, 1200);
