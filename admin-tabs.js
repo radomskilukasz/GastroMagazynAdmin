@@ -41,6 +41,19 @@
     section.dataset.adminTabs = Array.from(out).join(" ");
   }
 
+  function bindSidebarHover(layout, side){
+    if (!layout || !side || side.dataset.hoverBound === "1") return;
+    side.dataset.hoverBound = "1";
+
+    side.addEventListener("mouseenter", () => {
+      layout.classList.add("sidebarOpen");
+    });
+
+    side.addEventListener("mouseleave", () => {
+      layout.classList.remove("sidebarOpen");
+    });
+  }
+
   function addLayout(){
     const panel = q("#adminPanel");
     if (!panel || panel.dataset.tabsReady === "1") return;
@@ -62,7 +75,7 @@
       <nav class="adminSideNav">
         ${tabs.map(x => `<button type="button" class="adminTabButton" data-tab="${x[0]}" title="${x[3]}"><span>${x[1]}</span><b>${x[2]}</b></button>`).join("")}
       </nav>
-      <div class="adminSidebarFooter"><div>v2.7.0</div><div class="onlineDot"><span></span> System online</div></div>
+      <div class="adminSidebarFooter"><div>v2.8.0</div><div class="onlineDot"><span></span> System online</div></div>
     `;
 
     const main = document.createElement("main");
@@ -90,6 +103,7 @@
     main.appendChild(kpi);
     main.appendChild(grid);
 
+    bindSidebarHover(layout, side);
     panel.dataset.tabsReady = "1";
   }
 
@@ -154,6 +168,10 @@
       btn.dataset.bound = "1";
       btn.addEventListener("click", () => setTab(btn.dataset.tab));
     });
+
+    const layout = q(".adminAppLayout");
+    const side = q(".adminSidebar");
+    bindSidebarHover(layout, side);
   }
 
   function observe(){
@@ -235,7 +253,7 @@
     wrapRefresh();
     setTab(localStorage.getItem(KEY) || "pulpit");
     refreshKpi();
-    setTimeout(() => { improveUserSection(); setTab(localStorage.getItem(KEY) || "pulpit"); refreshKpi(); }, 400);
+    setTimeout(() => { improveUserSection(); setTab(localStorage.getItem(KEY) || "pulpit"); refreshKpi(); bind(); }, 400);
     setTimeout(refreshKpi, 1400);
   }
 
