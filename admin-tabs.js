@@ -1,6 +1,8 @@
 (function(){
   const KEY = "gastro_admin_tab";
   const USER_KEY = "gastro_admin_user_tab";
+  const BRAND_LOGO = "logo-removebg-preview.png";
+  const BRAND_NAME = "GastroSystem";
 
   const tabs = [
     ["pulpit", "▦", "Pulpit", "Centrum dowodzenia: szybki import, aktywne dni i zamknięcie dnia"],
@@ -54,8 +56,8 @@
     side.className = "adminSidebar";
     side.innerHTML = `
       <div class="adminSidebarBrand">
-        <img src="logo.png" alt="logo">
-        <div><div class="brandName">MealFlow</div><div class="brandSub">Catering Logistics</div></div>
+        <img src="${BRAND_LOGO}" alt="${BRAND_NAME}">
+        <div><div class="brandName">${BRAND_NAME}</div><div class="brandSub">Catering Logistics</div></div>
       </div>
       <nav class="adminSideNav">
         ${tabs.map(x => `<button type="button" class="adminTabButton" data-tab="${x[0]}" title="${x[3]}"><span>${x[1]}</span><b>${x[2]}</b></button>`).join("")}
