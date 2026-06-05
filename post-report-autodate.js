@@ -1,4 +1,5 @@
 (function(){
+  if(!document.querySelector('script[src*="admin-dashboard.js"]')){var s=document.createElement('script');s.src='admin-dashboard.js?v=1';s.async=false;document.body.appendChild(s);}
   function el(id){ return document.getElementById(id); }
   function group(){ var x = el('postReportMealDateInput'); return x ? (x.closest('.formGroup') || x.parentElement) : null; }
   function section(){ var x = el('postReportDeleteFile'); return x ? x.closest('.adminSection') : null; }
