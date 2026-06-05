@@ -89,12 +89,12 @@
 
       <div class="dashGrid">
         <div class="dashMetric dashOrange"><div class="dashLabel">Aktywne dni</div><div class="dashValue">${fmt(stats.activeDays)}</div><div class="dashSub">daty w obiegu</div></div>
-        <div class="dashMetric dashBlue"><div class="dashLabel">Aktywne sesje / wpisy</div><div class="dashValue">${fmt(stats.sessions)}</div><div class="dashSub">z raportu pakowania</div></div>
+        <div class="dashMetric dashBlue"><div class="dashLabel">Sesje pakowania</div><div class="dashValue">${fmt(stats.sessions)}</div><div class="dashSub">wpisy z raportu pakowania</div></div>
         <div class="dashMetric dashGreen"><div class="dashLabel">Spakowane</div><div class="dashValue">${fmt(stats.packedBags)}</div><div class="dashSub">torby zarejestrowane jako sesje</div></div>
         <div class="dashMetric dashRed"><div class="dashLabel">Odwołane</div><div class="dashValue">${fmt(stats.cancelled)}</div><div class="dashSub">torby wyłączone z pakowania</div></div>
         <div class="dashMetric"><div class="dashLabel">Torby w planie</div><div class="dashValue">${fmt(stats.plannedBags)}</div><div class="dashSub">unikalne bag_qr</div></div>
         <div class="dashMetric"><div class="dashLabel">Tacki w planie</div><div class="dashValue">${fmt(stats.plannedTrays)}</div><div class="dashSub">pozycje tray_qr</div></div>
-        <div class="dashMetric dashBlue"><div class="dashLabel">Zalogowani</div><div class="dashValue">${fmt(stats.logins)}</div><div class="dashSub">aktywne wpisy logowania</div></div>
+        <div class="dashMetric dashBlue"><div class="dashLabel">Użytkownicy</div><div class="dashValue">${fmt(stats.users)}</div><div class="dashSub">konta pracowników w systemie</div></div>
         <div class="dashMetric dashGreen"><div class="dashLabel">Stanowiska</div><div class="dashValue">${fmt(stats.activeLines)}</div><div class="dashSub">aktywne linie / stanowiska</div></div>
       </div>
     `;
@@ -106,14 +106,18 @@
     return (res.data || []).filter(r => r && r.meal_date).filter(r => Number(r.planned_trays||0)+Number(r.sessions_count||0)+Number(r.cancelled_count||0)+Number(r.planned_bags||0)>0);
   }
 
-  async function getActiveLogins(){
+  async function getUsersCount(){
     try {
-      const res = await supabaseClient.rpc('admin_active_login_locks');
-      if (res.error) return Array.isArray(window.activeLoginsCache) ? window.activeLoginsCache : [];
-      return res.data || [];
-    } catch(e) {
-      return Array.isArray(window.activeLoginsCache) ? window.activeLoginsCache : [];
-    }
+      const res = await supabaseClient.rpc('admin_list_qr_users');
+      if (!res.error && Array.isArray(res.data)) return res.data.length;
+    } catch(e) {}
+
+    try {
+      const res = await supabaseClient.rpc('list_auth_users_for_admin');
+      if (!res.error && Array.isArray(res.data)) return res.data.length;
+    } catch(e) {}
+
+    return Array.isArray(window.qrUsersCache) ? window.qrUsersCache.length : 0;
   }
 
   async function getStationLines(){
@@ -132,7 +136,7 @@
 
     try {
       const days = await getActiveDays();
-      const logins = await getActiveLogins();
+      const users = await getUsersCount();
       const lines = await getStationLines();
       const activeLines = (lines || []).filter(x => String(x.line_status || '').toLowerCase() === 'active').length;
 
@@ -149,7 +153,7 @@
         sessions,
         packedBags: sessions,
         cancelled,
-        logins: (logins || []).length,
+        users,
         activeLines
       });
     } catch(err) {
