@@ -261,3 +261,11 @@ async function exportExcel() {
     el("exportReportButton").disabled = false;
   }
 }
+
+(function loadAdminCsvDateModes(){
+  if (document.getElementById('adminCsvDateModesScript')) return;
+  const script = document.createElement('script');
+  script.id = 'adminCsvDateModesScript';
+  script.src = 'admin-csv-date-modes.js?v=1';
+  document.body.appendChild(script);
+})();
