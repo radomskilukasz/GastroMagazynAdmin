@@ -1,314 +1,228 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pl">
 <head>
-<link rel="icon" type="image/png" sizes="32x32" href="logo-removebg-preview.png">
-<link rel="icon" type="image/png" sizes="16x16" href="logo-removebg-preview.png">
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Panel administratora</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-
-<link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="dark-control-room.css?v=2">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GastroSystem Admin</title>
+  <link rel="icon" type="image/png" href="logo-removebg-preview.png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="admin-tabs.css">
+  <link rel="stylesheet" href="admin-tabs-polish.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 </head>
-
 <body>
 
-<div class="loginCard" id="loginScreen">
-  <div class="loginLogo">
-    <img src="logo.png" alt="logo">
+<div class="loginScreen" id="loginScreen">
+  <div class="loginCard">
+    <div class="loginLogo"><img src="logo-removebg-preview.png" alt="logo"></div>
+    <h1>GastroSystem</h1>
+    <p class="loginSubtitle">Panel administratora</p>
+    <label>Login</label>
+    <input id="adminLogin" placeholder="login lub email" autocomplete="username">
+    <label>Hasło</label>
+    <input id="adminPassword" type="password" placeholder="hasło" autocomplete="current-password">
+    <button id="loginButton" class="loginBtn">Zaloguj</button>
+    <p id="loginStatus" class="statusBox"></p>
   </div>
-
-  <h1>Panel administratora</h1>
-  <p class="loginSubtitle">Zaloguj się, aby zarządzać importem, aktywnymi dniami, archiwizacją i użytkownikami</p>
-
-  <label>Login lub email</label>
-  <input id="adminLogin" class="loginInput" placeholder="np. JanKowalski" autocomplete="username">
-
-  <label>Hasło</label>
-  <input id="adminPassword" class="loginInput" type="password" placeholder="Wpisz hasło" autocomplete="current-password">
-
-  <button id="loginButton" class="loginBtn">Zaloguj</button>
-  <p id="loginStatus" class="statusBox info">Status: gotowy do logowania</p>
 </div>
 
-<div class="pageShell hidden" id="adminPanel">
-
-  <div class="adminHeader">
-    <div class="adminTitleWrap">
-      <img src="logo.png" class="adminLogo" alt="logo">
+<div class="app hidden" id="adminPanel">
+  <header class="topbar">
+    <div class="brandBox">
+      <img src="logo-removebg-preview.png" alt="logo" class="adminLogo">
       <div>
         <h1>Panel administratora</h1>
-        <p>Jeden import CSV, aktywne dni robocze, raporty, archiwizacja i użytkownicy.</p>
+        <p id="adminUserLabel">GastroSystem</p>
       </div>
     </div>
-    <div class="headerActions">
-      <div class="loginBadge" id="adminLoginBadge">✅ Zalogowano</div>
-      <button class="lightBtn smallBtn" style="width:auto;" onclick="refreshAdminData()">🔄 Odśwież</button>
-      <button class="danger smallBtn" style="width:auto;" onclick="adminLogout()">Wyloguj</button>
-    </div>
-  </div>
+    <button id="logoutButton" class="darkBtn smallBtn">Wyloguj</button>
+  </header>
 
-  <div class="adminGrid">
-
-    <section class="adminSection">
+  <main class="adminGrid">
+    <section class="adminSection" id="planSection">
       <div class="sectionHeader">
         <div>
-          <h2>📥 Jeden import CSV</h2>
-          <div class="sectionHint">Wgraj plan pakowania i dane klienta z jednego pliku. Możesz mieć kilka aktywnych dni naraz.</div>
+          <h2>📥 Import planu</h2>
+          <div class="sectionHint">Wgraj CSV z planem pakowania.</div>
         </div>
       </div>
-
       <div class="sectionBody">
-        <div class="actionStack">
-          <div class="formGroup">
-            <label>Dzień jedzony — z CSV albo ręcznie</label>
-            <input type="date" id="mealDateInput">
-          </div>
-
-          <p id="mealDateStatus" class="statusBox info">Dzień jedzony: nieodświeżony.</p>
-
-          <div class="formGroup">
-            <label>Plik CSV</label>
-            <input type="file" id="fileInput" class="fileInput" accept=".csv,text/csv">
-          </div>
-
-          <button id="uploadButton">⬆️ Wgraj jeden CSV</button>
-
-          <div class="adminTip">
-            <b>Obowiązujący format CSV:</b><br>
-            <code>client_id;delivery_date;zone;default_diet;variant;calories;bag_qr;tray_qr;meal;code;size;dish_name</code>
-            <br><br>
-            Jeden plik zasila jednocześnie <b>plan pakowania</b> oraz <b>dane klienta</b>.
-            Jeden CSV może zawierać tylko jeden dzień jedzony. Kolejny dzień można wgrać bez archiwizacji poprzedniego.
-          </div>
-
-          <p id="uploadStatus" class="statusBox"></p>
-          <p id="operationalStatus" class="statusBox info">Stan danych operacyjnych: nieodświeżony.</p>
-        </div>
+        <input type="file" id="csvFile" accept=".csv,text/csv">
+        <button id="importButton" class="primaryBtn">Importuj plan</button>
+        <p id="importStatus" class="statusBox info">Status importu: gotowy.</p>
       </div>
     </section>
 
-    <section class="adminSection">
+    <section class="adminSection" id="activeDaySection">
       <div class="sectionHeader">
         <div>
-          <h2>📦 Raport i archiwizacja dnia</h2>
-          <div class="sectionHint">Wybierz dzień w sekcji aktywnych dni, pobierz raport i zamknij tylko tę datę.</div>
+          <h2>📅 Aktywne dni</h2>
+          <div class="sectionHint">Zarządzanie dniami roboczymi.</div>
         </div>
       </div>
-
       <div class="sectionBody">
-        <div class="actionStack">
-          <button id="exportReportButton" class="darkBtn">📤 Eksport Excel dla wybranego dnia</button>
-          <button id="resetDayButton" class="danger">🧹 Zarchiwizuj wybrany dzień</button>
-
-          <div class="adminTip">
-            Raport oraz archiwizacja działają po <b>wybranym aktywnym dniu</b>.
-            Zamykana jest tylko wskazana data, a inne aktywne dni zostają w systemie.
-            Archiwum zostaje osobno i nie bierze udziału w wyborze bieżących dni.
-          </div>
-
-          <p id="sessionsStatus" class="statusBox"></p>
-        </div>
+        <div id="activeDaysBox"></div>
+        <p id="activeDaysStatus" class="statusBox info">Status aktywnych dni: gotowy.</p>
       </div>
     </section>
 
-    <section class="adminSection fullWidth">
+    <section class="adminSection" id="reportSection">
       <div class="sectionHeader">
         <div>
-          <h2>🧾 Zmiany poraportowe — odwołaj torby</h2>
-          <div class="sectionHint">Użyj tylko wtedy, gdy po raporcie trzeba oznaczyć wskazane torby jako ODWOŁANE dla konkretnej daty.</div>
+          <h2>📊 Raport</h2>
+          <div class="sectionHint">Raport pakowania z aktywnego dnia.</div>
         </div>
       </div>
-
       <div class="sectionBody">
-        <div class="actionStack">
-          <div class="formGroup">
-            <label>Dzień jedzony zmian poraportowych</label>
-            <input type="date" id="postReportMealDateInput">
-          </div>
-
-          <div class="formGroup">
-            <label>CSV z torbami do odwołania</label>
-            <input type="file" id="postReportDeleteFile" class="fileInput" accept=".csv,text/csv">
-          </div>
-
-          <div class="roleBox">
-            <button id="previewPostReportDeleteButton" class="darkBtn">🔎 Sprawdź przed odwołaniem</button>
-            <input id="postReportDeleteConfirm" placeholder="Wpisz ODWOŁAJ, aby odblokować odwołanie">
-            <button id="executePostReportDeleteButton" class="danger">⛔ Odwołaj torby z wybranego dnia</button>
-          </div>
-
-          <div class="adminTip">
-            CSV powinien zawierać kody <b>bag_qr</b>. Wybrany dzień decyduje, których toreb dotyczy operacja.
-            Torby odwołane nie liczą się do normalnego pakowania, poprawnych, niepoprawnych, braków ani tempa.
-          </div>
-
-          <p id="postReportDeleteStatus" class="statusBox info">Status: wybierz dzień jedzony, CSV i najpierw wykonaj podgląd.</p>
-          <div id="postReportDeletePreview"></div>
-        </div>
+        <button id="refreshReportButton" class="darkBtn">Odśwież raport</button>
+        <p id="reportStatus" class="statusBox info">Status raportu: gotowy.</p>
+        <div id="reportBox"></div>
       </div>
     </section>
 
-    <section class="adminSection fullWidth">
+    <section class="adminSection" id="cancelSection">
       <div class="sectionHeader">
         <div>
-          <h2>🗑️ Czyszczenie archiwum</h2>
-          <div class="sectionHint">Usuń archiwalne dane z wybranego zakresu dni jedzonych. Tej operacji nie da się cofnąć.</div>
+          <h2>🚫 Odwołane diety</h2>
+          <div class="sectionHint">Wgraj CSV odwołanych diet.</div>
         </div>
       </div>
-
       <div class="sectionBody">
-        <div class="actionStack">
-          <div class="roleBox">
-            <input type="date" id="archiveClearDateFrom">
-            <input type="date" id="archiveClearDateTo">
-            <button id="clearArchiveButton" class="danger">🗑️ Wyczyść archiwum z zakresu</button>
-          </div>
-
-          <div class="adminTip">
-            Usuwanie działa po <b>dniu jedzonym</b>. Przykład: od 2026-05-01 do 2026-05-03 usuwa archiwum za 1, 2 i 3 maja.
-          </div>
-
-          <p id="archiveClearStatus" class="statusBox info">Status: wybierz zakres dat i kliknij czyszczenie archiwum.</p>
-        </div>
+        <input type="file" id="cancelCsvFile" accept=".csv,text/csv">
+        <button id="cancelImportButton" class="danger">Wgraj odwołane diety</button>
+        <p id="cancelImportStatus" class="statusBox info">Status odwołanych diet: gotowy.</p>
       </div>
     </section>
 
-    <section class="adminSection fullWidth">
+    <section class="adminSection" id="archiveSection">
       <div class="sectionHeader">
         <div>
-          <h2>🧪 Generator testowej torby PDF</h2>
-          <div class="sectionHint">Wpisz QR torby z aktywnego planu, aby wygenerować jedną stronę PDF do testu skanowania.</div>
+          <h2>🗄️ Archiwum</h2>
+          <div class="sectionHint">Schowaj zakończony dzień do archiwum.</div>
         </div>
       </div>
+      <div class="sectionBody">
+        <input type="date" id="archiveDateInput">
+        <button id="archiveDayButton" class="danger">Schowaj dzień do archiwum</button>
+        <p id="archiveStatus" class="statusBox info">Status archiwum: gotowy.</p>
+      </div>
+    </section>
 
+    <section class="adminSection" id="archiveRemoveSection">
+      <div class="sectionHeader">
+        <div>
+          <h2>🧹 Usuń z archiwum</h2>
+          <div class="sectionHint">Usuń dane archiwalne z wybranego zakresu dat.</div>
+        </div>
+      </div>
+      <div class="sectionBody">
+        <input type="date" id="archiveRemoveFromInput">
+        <input type="date" id="archiveRemoveToInput">
+        <button id="archiveRemoveButton" class="danger">Usuń z archiwum</button>
+        <p id="archiveRemoveStatus" class="statusBox info">Status usuwania archiwum: gotowy.</p>
+      </div>
+    </section>
+
+    <section class="adminSection fullWidth" id="testBagSection">
+      <div class="sectionHeader">
+        <div>
+          <h2>🧪 Test torby PDF</h2>
+          <div class="sectionHint">Wygeneruj PDF testowy z kodami QR tacek dla torby z aktualnego planu.</div>
+        </div>
+      </div>
       <div class="sectionBody">
         <div class="actionStack">
-          <div class="roleBox">
-            <input id="testBagQrInput" placeholder="QR torby, np. GS0WYKE5F4" autocomplete="off">
-            <button id="testBagPdfButton" class="darkBtn">🧾 Generuj PDF testowy</button>
-          </div>
-
-          <div class="adminTip">
-            PDF zawiera kod kreskowy torby oraz wszystkie QR tacek z podpisami. Przydatne do sprawdzenia skanerów i procesu kontroli.
-          </div>
-
+          <input id="testBagQrInput" placeholder="QR torby, np. GS0WYKE5F4" autocomplete="off">
+          <button id="testBagPdfButton" class="darkBtn">Wygeneruj test torby</button>
           <p id="testBagStatus" class="statusBox info">Status: wpisz QR torby i wygeneruj PDF testowy.</p>
         </div>
       </div>
     </section>
 
-    <section class="adminSection fullWidth">
+    <section class="adminSection fullWidth" id="usersSection">
       <div class="sectionHeader">
         <div>
           <h2>👥 Użytkownicy, role i QR</h2>
           <div class="sectionHint">Twórz konta, nadaj role i generuj kody QR logowania dla pracowników.</div>
         </div>
       </div>
-
       <div class="sectionBody">
-        <div class="actionStack">
-          <div class="subPanel">
-            <h3 class="subPanelTitle">Nadaj rolę istniejącemu użytkownikowi</h3>
-            <div class="roleBox">
-              <input id="roleUserLogin" list="usersList" placeholder="login lub email użytkownika">
-              <datalist id="usersList"></datalist>
-              <select id="roleSelect">
-                <option value="worker">worker — pakowanie</option>
-                <option value="manager">manager — pakowanie + raport</option>
-                <option value="admin">admin — wszystko</option>
-              </select>
-              <button id="setRoleButton">💾 Nadaj rolę</button>
-            </div>
-            <p id="roleStatus" class="statusBox"></p>
+        <div class="subPanel">
+          <h3 class="subPanelTitle">Nadaj rolę</h3>
+          <div class="roleBox">
+            <input id="roleUserLogin" list="usersList" placeholder="login lub email użytkownika">
+            <select id="roleSelect">
+              <option value="worker">worker</option>
+              <option value="manager">manager</option>
+              <option value="admin">admin</option>
+            </select>
+            <button id="roleButton">Zapisz rolę</button>
           </div>
+          <p id="roleStatus" class="statusBox info">Status ról: gotowy.</p>
+        </div>
 
-          <div class="subPanel">
-            <h3 class="subPanelTitle">Dodaj nowego użytkownika</h3>
-            <div class="userCreateBox">
-              <input id="newUserLogin" placeholder="nowy login lub email">
-              <input id="newUserDisplayName" placeholder="ładna nazwa, np. Daria Malczewska">
-              <input id="newUserPassword" type="password" placeholder="hasło dla użytkownika">
-              <select id="newUserRole">
-                <option value="worker">worker</option>
-                <option value="manager">manager</option>
-                <option value="admin">admin</option>
-              </select>
-            </div>
-            <div style="margin-top:12px;">
-              <button id="createUserButton" onclick="createUserWithDisplayName(event); return false;">➕ Dodaj użytkownika</button>
-            </div>
+        <div class="subPanel">
+          <h3 class="subPanelTitle">Dodaj użytkownika</h3>
+          <div class="roleBox">
+            <input id="newUserLogin" placeholder="nowy login lub email">
+            <input id="newUserPassword" placeholder="hasło tymczasowe" type="password">
+            <select id="newUserRole">
+              <option value="worker">worker</option>
+              <option value="manager">manager</option>
+              <option value="admin">admin</option>
+            </select>
+            <button id="newUserButton">Dodaj użytkownika</button>
           </div>
+          <p id="newUserStatus" class="statusBox info">Status użytkownika: gotowy.</p>
+        </div>
 
-          <div class="subPanel">
-            <h3 class="subPanelTitle">Usuń użytkownika</h3>
-            <div class="userBox">
-              <input id="deleteUserLogin" list="usersList" placeholder="login lub email do usunięcia">
-              <button id="deleteUserButton" class="danger">🗑️ Usuń użytkownika</button>
-            </div>
+        <div class="subPanel">
+          <h3 class="subPanelTitle">Usuń użytkownika</h3>
+          <div class="roleBox">
+            <input id="deleteUserLogin" list="usersList" placeholder="login lub email do usunięcia">
+            <button id="deleteUserButton" class="danger">Usuń użytkownika</button>
           </div>
+          <p id="deleteUserStatus" class="statusBox info">Status usuwania: gotowy.</p>
+        </div>
 
-          <div class="subPanel">
-            <h3 class="subPanelTitle">Kody QR logowania</h3>
-            <div class="qrBox">
-              <input id="qrUserLogin" list="usersList" placeholder="login lub email użytkownika">
-              <button id="qrGenerateButton">🔳 Wygeneruj QR</button>
-              <button id="qrDisableButton" class="danger">🚫 Wyłącz QR</button>
-            </div>
-            <p id="qrStatus" class="statusBox info">Status QR: gotowy.</p>
-            <div id="qrPreview" class="qrPreview hidden">
-              <div class="qrPreviewTitle">Kod QR logowania</div>
-              <div class="qrPreviewUser" id="qrPreviewUser">-</div>
-              <div id="qrCanvasBox" class="qrCanvasBox"></div>
-              <div id="qrTokenText" class="qrTokenText"></div>
-              <button id="qrPrintButton" class="darkBtn" style="margin-top:14px;">🖨️ Drukuj QR</button>
-            </div>
+        <div class="subPanel" id="qrBox">
+          <h3 class="subPanelTitle">Kody QR logowania</h3>
+          <div class="roleBox">
+            <input id="qrUserLogin" list="usersList" placeholder="login lub email użytkownika">
+            <button id="qrGenerateButton">🔳 Wygeneruj QR</button>
+            <button id="qrDisableButton" class="danger">🚫 Wyłącz QR</button>
           </div>
-
-          <div class="adminTip">
-            Nazwa wyświetlana zapisuje się w profilu użytkownika. Raport i kontrola mogą dzięki temu pokazywać imię i nazwisko zamiast loginu technicznego.
+          <p id="qrStatus" class="statusBox info">Status QR: gotowy.</p>
+          <div class="qrPreview" id="qrPreview">
+            <div class="qrPreviewTitle">Kod QR logowania</div>
+            <div id="qrCanvas"></div>
+            <div id="qrTokenText" class="qrTokenText"></div>
+            <button id="qrPrintButton" class="darkBtn" style="margin-top:14px;">🖨️ Drukuj QR</button>
           </div>
+          <p class="adminTip">
+            Wygenerowanie nowego QR zastępuje poprzedni kod użytkownika. QR działa dla workerów, managerów i adminów. Login i hasło nadal działają awaryjnie.
+          </p>
+        </div>
 
-          <div class="subPanel">
-            <h3 class="subPanelTitle">Lista użytkowników</h3>
-            <div id="usersTable" class="tableWrap"></div>
-          </div>
-
-          <div class="subPanel">
-            <h3 class="subPanelTitle">Użytkownicy i status QR</h3>
-            <div id="qrTokensTable" class="tableWrap"></div>
-          </div>
-
-          <p id="userStatus" class="statusBox"></p>
+        <div class="subPanel">
+          <h3 class="subPanelTitle">Lista użytkowników</h3>
+          <button id="refreshUsersButton" class="darkBtn">Odśwież listę użytkowników</button>
+          <datalist id="usersList"></datalist>
+          <div id="usersTableWrap" class="tableWrap"></div>
         </div>
       </div>
     </section>
 
-  </div>
-</div>
-
-<div class="hidden" aria-hidden="true">
-  <span id="statLines">0</span>
-  <span id="statQueued">0</span>
-  <span id="statBadStation">0</span>
-  <span id="statLogins">0</span>
-  <button id="refreshStationButton" type="button"></button>
-  <button id="clearAllQueuesButton" type="button"></button>
-  <button id="closeAllLinesButton" type="button"></button>
-  <p id="stationStatus" class="statusBox"></p>
-  <p id="loginsStatus" class="statusBox"></p>
-  <div id="stationLinesTable"></div>
-  <div id="activeLoginsTable"></div>
+  </main>
 </div>
 
 <div id="confirmModal" class="modalBg hidden">
   <div class="modal">
-    <h2 id="confirmTitle">Potwierdź akcję</h2>
+    <h2 id="confirmTitle">Potwierdzenie</h2>
     <p id="confirmText" class="modalText"></p>
     <div id="confirmDetails" class="modalDetails hidden"></div>
     <div id="confirmButtons"></div>
@@ -330,7 +244,7 @@
 <script src="import-append.js"></script>
 <script src="import-multiday.js"></script>
 <script src="test-bags.js"></script>
-<script src="manual-qr.js"></script>
+<script src="manual-qr.js?v=4"></script>
 <script src="admin-extra.js"></script>
 <script src="active-days-admin.js"></script>
 <script src="report-active-day.js"></script>
