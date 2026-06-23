@@ -24,7 +24,7 @@ function insertManualQrSection() {
       <div class="sectionHeader">
         <div>
           <h2>🔳 Generator dowolnego kodu QR</h2>
-          <div class="sectionHint">Wpisz własny tekst do zakodowania oraz podpis widoczny nad kodem QR.</div>
+          <div class="sectionHint">Wpisz własny tekst do zakodowania. Podpis na górze jest opcjonalny.</div>
         </div>
       </div>
 
@@ -40,7 +40,7 @@ function insertManualQrSection() {
             Wydruk ma dokładnie ten sam układ, szerokość, ramkę, logo i rozmiar QR jak karta kodu QR logowania.
           </div>
 
-          <p id="manualQrStatus" class="statusBox info">Status: wpisz podpis i zawartość QR, a następnie wydrukuj kod.</p>
+          <p id="manualQrStatus" class="statusBox info">Status: wpisz zawartość QR, opcjonalnie podpis, a następnie wydrukuj kod.</p>
         </div>
       </div>
     </section>
@@ -74,6 +74,22 @@ function manualQrSafeHtml(value) {
   }[m]));
 }
 
+function manualQrNormalizeLabel(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "")
+    .replaceAll("Ś","S")
+    .replaceAll("Ą","A")
+    .replaceAll("Ć","C")
+    .replaceAll("Ę","E")
+    .replaceAll("Ł","L")
+    .replaceAll("Ń","N")
+    .replaceAll("Ó","O")
+    .replaceAll("Ź","Z")
+    .replaceAll("Ż","Z");
+}
+
 function manualQrSvg(token) {
   if (typeof makeQrSvg === "function") {
     return makeQrSvg(token, 8, 2);
@@ -105,12 +121,6 @@ async function generateManualQrPdf() {
   const label = String(labelInput?.value || "").trim();
   const qrContent = String(codeInput?.value || "").trim();
 
-  if (!label) {
-    setManualQrStatus("❌ Wpisz podpis, który ma być widoczny nad kodem QR.", "bad");
-    labelInput?.focus();
-    return;
-  }
-
   if (!qrContent) {
     setManualQrStatus("❌ Wpisz tekst, który ma zawierać kod QR.", "bad");
     codeInput?.focus();
@@ -133,8 +143,10 @@ async function generateManualQrPdf() {
 
   setManualQrStatus("⏳ Otwieram wydruk QR...", "info");
 
-  const safeLabel = manualQrSafeHtml(label);
+  const shouldShowLabel = label && manualQrNormalizeLabel(label) !== manualQrNormalizeLabel("Dowolny kod QR");
+  const safeLabel = shouldShowLabel ? manualQrSafeHtml(label) : "";
   const safeContent = manualQrSafeHtml(qrContent);
+  const labelHtml = safeLabel ? `<h1>${safeLabel}</h1>` : "";
   const logoUrl = manualQrSafeHtml(getAbsoluteAssetUrl("logo.png"));
 
   const printWindow = window.open("", "_blank", "width=720,height=900");
@@ -185,11 +197,13 @@ async function generateManualQrPdf() {
           line-height: 1.05;
         }
 
-        .login {
-          font-size: 32px;
-          font-weight: 900;
-          margin: 12px 0 18px;
-          word-break: break-word;
+        .login,
+        .badge,
+        .typeBadge,
+        .qrBadge,
+        .kindBadge,
+        .manualQrBadge {
+          display: none !important;
         }
 
         .qrBox {
@@ -236,7 +250,7 @@ async function generateManualQrPdf() {
     <body>
       <div class="card">
         <img src="${logoUrl}" class="logo" alt="logo" onerror="this.style.visibility='hidden'">
-        <h1>${safeLabel}</h1>
+        ${labelHtml}
 
         <div class="qrBox">
           ${qrSvg}
@@ -251,6 +265,11 @@ async function generateManualQrPdf() {
       </div>
 
       <script>
+        document.querySelectorAll("body *").forEach(function(el) {
+          if (el.children.length === 0 && el.textContent.trim() === "Dowolny kod QR") {
+            el.remove();
+          }
+        });
         setTimeout(function() {
           window.print();
         }, 500);
@@ -262,7 +281,7 @@ async function generateManualQrPdf() {
   printWindow.document.close();
 
   setManualQrStatus(
-    "✅ Otworzono wydruk QR.\nPodpis: " + label + "\nZawartość QR: " + qrContent,
+    "✅ Otworzono wydruk QR.\nZawartość QR: " + qrContent,
     "ok"
   );
 
